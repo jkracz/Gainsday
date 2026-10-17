@@ -1,12 +1,26 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Allow Health Access" : {},
+    "Calendar" : {},
+    "Choose a Calendar" : {},
+    "Finished" : {},
+    "Full access lets Gainsday see the events it already added, so it never adds a workout twice." : {},
     "Gainsday" : {
       "shouldTranslate" : false
     },
-    "Your workouts will appear in your calendar." : {
-
-    }
+    "Gainsday reads your workouts. It never writes to Health." : {},
+    "Health" : {},
+    "Last Sync" : {},
+    "New Events" : {},
+    "None" : {},
+    "Set Up Gainsday" : {},
+    "Start Syncing" : {},
+    "Syncing…" : {},
+    "Turn on full calendar access for Gainsday in Settings, then try again." : {},
+    "Workouts Since" : {},
+    "Workouts you finish appear in this calendar when you open Gainsday." : {},
+    "Workouts you finish from now on are added. Earlier workouts are left out." : {}
   },
   "version" : "1.0"
 }
