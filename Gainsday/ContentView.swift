@@ -3,8 +3,11 @@ import Playgrounds
 
 struct ContentView: View {
     var body: some View {
-        Text("Hello, world!")
-            .padding()
+        ContentUnavailableView(
+            "Gainsday",
+            systemImage: "figure.run",
+            description: Text("Your workouts will appear in your calendar.")
+        )
     }
 }
 

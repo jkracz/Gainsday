@@ -9,6 +9,20 @@ xcuserdata/
 # Build output
 DerivedData/
 build/
+*.xcresult
+*.ipa
+*.dSYM
+*.dSYM.zip
+*.xcarchive
+
+# Signing: certificates, keys and profiles never belong in the repo
+*.p12
+*.p8
+*.cer
+*.certSigningRequest
+*.mobileprovision
+*.provisionprofile
 
 # Swift Package Manager
 .build/
+.swiftpm/
