@@ -64,7 +64,9 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
     }
 
     /// Whether this entry is about the given workout, either as the cluster or as a member.
+    ///
+    /// Checks `workoutID` directly, because a decoded or edited entry can lack it in `memberIDs`.
     public func covers(_ workoutID: UUID) -> Bool {
-        memberIDs.contains(workoutID)
+        self.workoutID == workoutID || memberIDs.contains(workoutID)
     }
 }

@@ -38,4 +38,20 @@ struct DomainTests {
         #expect(entry.covers(strava))
         #expect(!entry.covers(UUID()))
     }
+
+    @Test("A ledger entry covers its cluster identity even when memberIDs lacks it")
+    func ledgerEntryCoversClusterWithoutMembers() {
+        let watch = UUID()
+        var entry = LedgerEntry(
+            workoutID: watch,
+            workoutStart: .distantPast,
+            workoutEnd: .distantPast,
+            state: .owned,
+            createdAt: .distantPast,
+            updatedAt: .distantPast
+        )
+        entry.memberIDs = []
+
+        #expect(entry.covers(watch))
+    }
 }
