@@ -1,0 +1,12 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Gainsday" : {
+      "shouldTranslate" : false
+    },
+    "Your workouts will appear in your calendar." : {
+
+    }
+  },
+  "version" : "1.0"
+}
