@@ -54,7 +54,7 @@ struct SetupView: View {
                     }
                     .disabled(!healthRequested || selectedCalendar == nil || isStarting)
                 } footer: {
-                    Text("Workouts you finish from now on are added. Earlier workouts are left out.")
+                    Text("Workouts you start from now on are added. Earlier workouts are left out.")
                 }
 
                 if let errorMessage {
@@ -85,7 +85,12 @@ struct SetupView: View {
         do {
             calendarAccessDenied = !(try await coordinator.calendar.requestFullAccess())
             guard !calendarAccessDenied else { return }
-            calendars = try await coordinator.calendar.writableCalendars()
+            let writable = try await coordinator.calendar.writableCalendars()
+            calendars = writable
+            // Preselect the calendar restored from iCloud after a reinstall.
+            if let restored = coordinator.settings.destinationCalendar {
+                selectedCalendarID = writable.first { $0.id == restored.id }?.id
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

@@ -82,8 +82,11 @@ actor EventKitCalendarStore: CalendarStore {
         }
     }
 
+    /// Looks up by external identifier, falling back to the local identifier used
+    /// for events that had no external identifier yet when they were created.
     private func ekEvent(withID id: String) -> EKEvent? {
         store.calendarItems(withExternalIdentifier: id).lazy.compactMap { $0 as? EKEvent }.first
+            ?? store.calendarItem(withIdentifier: id) as? EKEvent
     }
 
     private func apply(_ content: EventContent, to event: EKEvent) {

@@ -20,7 +20,7 @@
     "Turn on full calendar access for Gainsday in Settings, then try again." : {},
     "Workouts Since" : {},
     "Workouts you finish appear in this calendar when you open Gainsday." : {},
-    "Workouts you finish from now on are added. Earlier workouts are left out." : {}
+    "Workouts you start from now on are added. Earlier workouts are left out." : {}
   },
   "version" : "1.0"
 }

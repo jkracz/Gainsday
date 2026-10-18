@@ -29,7 +29,7 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
     func changes(since anchor: WorkoutAnchor?) async throws -> WorkoutChanges {
         let descriptor = HKAnchoredObjectQueryDescriptor(
             predicates: [.workout()],
-            anchor: try anchor.flatMap(Self.queryAnchor)
+            anchor: anchor.flatMap(Self.queryAnchor)
         )
         let result = try await descriptor.result(for: store)
         return WorkoutChanges(
@@ -89,7 +89,8 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
         WorkoutAnchor(data: try NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true))
     }
 
-    private static func queryAnchor(_ anchor: WorkoutAnchor) throws -> HKQueryAnchor? {
-        try NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: anchor.data)
+    /// An anchor that can't be read is treated as lost, which is safe, rather than failing every pass.
+    private static func queryAnchor(_ anchor: WorkoutAnchor) -> HKQueryAnchor? {
+        try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: anchor.data)
     }
 }

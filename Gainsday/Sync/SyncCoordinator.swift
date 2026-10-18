@@ -12,6 +12,9 @@ final class SyncCoordinator {
 
     private(set) var settings = Settings()
     private(set) var hasLoaded = false
+    /// Health and calendar permissions don't survive a reinstall, though settings
+    /// restored from iCloud do, so setup runs once on every install.
+    private(set) var hasFinishedSetupOnThisDevice = UserDefaults.standard.bool(forKey: setupKey)
     private(set) var isSyncing = false
     private(set) var lastPass: Pass?
     private(set) var lastError: String?
@@ -22,9 +25,10 @@ final class SyncCoordinator {
     private let anchors: AnchorStore
     private let clock = SystemClock()
     private let engine: SyncEngine
+    private static let setupKey = "hasFinishedSetupOnThisDevice"
 
     var isSetUp: Bool {
-        settings.destinationCalendar != nil && settings.syncStartDate != nil
+        hasFinishedSetupOnThisDevice && settings.destinationCalendar != nil && settings.syncStartDate != nil
     }
 
     init(ledger: any Ledger) {
@@ -53,6 +57,8 @@ final class SyncCoordinator {
         settings.destinationCalendar = CalendarReference(id: destination.id, title: destination.title)
         settings.syncStartDate = settings.syncStartDate ?? clock.now
         await settingsStore.save(settings)
+        UserDefaults.standard.set(true, forKey: Self.setupKey)
+        hasFinishedSetupOnThisDevice = true
         await sync()
     }
 
