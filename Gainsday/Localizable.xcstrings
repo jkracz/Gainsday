@@ -11,6 +11,8 @@
     },
     "Gainsday reads your workouts. It never writes to Health." : {},
     "Health" : {},
+    "Health isn't available on this device, so Gainsday can't read your workouts." : {},
+    "Health isn't available on this device." : {},
     "Last Sync" : {},
     "New Events" : {},
     "None" : {},

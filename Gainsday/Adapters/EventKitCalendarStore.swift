@@ -12,6 +12,11 @@ actor EventKitCalendarStore: CalendarStore {
         try await store.requestFullAccessToEvents()
     }
 
+    /// Fires when calendars or events change, in this app or elsewhere.
+    nonisolated func changes() -> AsyncStream<Void> {
+        NotificationCenter.default.signals(named: .EKEventStoreChanged)
+    }
+
     func accessMode() async -> AccessMode {
         switch EKEventStore.authorizationStatus(for: .event) {
         case .fullAccess: .full

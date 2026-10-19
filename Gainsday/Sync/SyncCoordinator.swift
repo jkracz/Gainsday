@@ -51,6 +51,14 @@ final class SyncCoordinator {
         hasLoaded = true
     }
 
+    /// Reloads settings whenever iCloud delivers a change, since settings restored
+    /// after a reinstall can arrive after the app has opened.
+    func watchCloudSettings() async {
+        for await _ in settingsStore.externalChanges() {
+            await load()
+        }
+    }
+
     /// Saves the destination and starts syncing workouts from now on. A sync start
     /// date restored from iCloud is kept, so a reinstall doesn't skip workouts.
     func finishSetup(destination: CalendarInfo) async {

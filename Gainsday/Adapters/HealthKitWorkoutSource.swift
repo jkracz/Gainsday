@@ -4,10 +4,17 @@ import SyncCore
 
 /// Reads workouts and their metrics from HealthKit. Read only: the app never writes to Health.
 nonisolated final class HealthKitWorkoutSource: WorkoutSource {
+    /// Thrown instead of touching HealthKit on devices without it, such as some iPads.
+    struct Unavailable: LocalizedError {
+        var errorDescription: String? { String(localized: "Health isn't available on this device.") }
+    }
+
+    let isHealthDataAvailable: Bool
     private let store: HKHealthStore
 
-    init(store: HKHealthStore = HKHealthStore()) {
+    init(store: HKHealthStore = HKHealthStore(), isHealthDataAvailable: Bool = HKHealthStore.isHealthDataAvailable()) {
         self.store = store
+        self.isHealthDataAvailable = isHealthDataAvailable
     }
 
     /// Workouts plus the metrics events can show. Route and location are deliberately absent.
@@ -23,10 +30,12 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
     /// Shows the Health permission sheet. HealthKit never reveals whether read
     /// access was granted, so this only throws if the sheet couldn't be shown.
     func requestAuthorization() async throws {
+        try requireHealthData()
         try await store.requestAuthorization(toShare: [], read: Self.readTypes)
     }
 
     func changes(since anchor: WorkoutAnchor?) async throws -> WorkoutChanges {
+        try requireHealthData()
         let descriptor = HKAnchoredObjectQueryDescriptor(
             predicates: [.workout()],
             anchor: anchor.flatMap(Self.queryAnchor)
@@ -40,6 +49,7 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
     }
 
     func workouts(in interval: DateInterval) async throws -> [Workout] {
+        try requireHealthData()
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.workout(HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: .strictStartDate))],
             sortDescriptors: [SortDescriptor(\.startDate)]
@@ -48,12 +58,17 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
     }
 
     func recentWorkouts(limit: Int) async throws -> [Workout] {
+        try requireHealthData()
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.workout()],
             sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
             limit: limit
         )
         return try await descriptor.result(for: store).map(Self.workout)
+    }
+
+    private func requireHealthData() throws {
+        guard isHealthDataAvailable else { throw Unavailable() }
     }
 
     private static func workout(_ sample: HKWorkout) -> Workout {

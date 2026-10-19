@@ -21,6 +21,7 @@ import SwiftUI
             ContentView()
                 .environment(coordinator)
                 .task { await coordinator.load() }
+                .task { await coordinator.watchCloudSettings() }
         }
         .onChange(of: scenePhase) { _, phase in
             // Catch up on every app open.

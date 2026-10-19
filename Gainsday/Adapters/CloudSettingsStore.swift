@@ -16,6 +16,11 @@ actor CloudSettingsStore: SettingsStore {
         return (try? JSONDecoder().decode(Settings.self, from: data)) ?? Settings()
     }
 
+    /// Fires when iCloud delivers settings changed elsewhere, such as after a reinstall.
+    nonisolated func externalChanges() -> AsyncStream<Void> {
+        NotificationCenter.default.signals(named: NSUbiquitousKeyValueStore.didChangeExternallyNotification)
+    }
+
     func save(_ settings: Settings) async {
         guard let data = try? JSONEncoder().encode(settings) else { return }
         store.set(data, forKey: Self.key)

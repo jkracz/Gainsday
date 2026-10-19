@@ -18,11 +18,15 @@ struct SetupView: View {
                     Button("Allow Health Access", systemImage: healthRequested ? "checkmark.circle.fill" : "heart") {
                         Task { await requestHealthAccess() }
                     }
-                    .disabled(healthRequested)
+                    .disabled(healthRequested || !coordinator.health.isHealthDataAvailable)
                 } header: {
                     Text("Health")
                 } footer: {
-                    Text("Gainsday reads your workouts. It never writes to Health.")
+                    if coordinator.health.isHealthDataAvailable {
+                        Text("Gainsday reads your workouts. It never writes to Health.")
+                    } else {
+                        Text("Health isn't available on this device, so Gainsday can't read your workouts.")
+                    }
                 }
 
                 Section {
@@ -65,6 +69,16 @@ struct SetupView: View {
                 }
             }
             .navigationTitle("Set Up Gainsday")
+            .task {
+                // Keep the list current if the user adds or removes a calendar elsewhere.
+                for await _ in coordinator.calendar.changes() where calendars != nil {
+                    await refreshCalendars()
+                }
+            }
+            .onChange(of: coordinator.settings.destinationCalendar) {
+                // Settings restored from iCloud can arrive after the list has loaded.
+                if selectedCalendar == nil { selectRestoredCalendar() }
+            }
         }
     }
 
@@ -85,15 +99,26 @@ struct SetupView: View {
         do {
             calendarAccessDenied = !(try await coordinator.calendar.requestFullAccess())
             guard !calendarAccessDenied else { return }
-            let writable = try await coordinator.calendar.writableCalendars()
-            calendars = writable
-            // Preselect the calendar restored from iCloud after a reinstall.
-            if let restored = coordinator.settings.destinationCalendar {
-                selectedCalendarID = writable.first { $0.id == restored.id }?.id
-            }
+            await refreshCalendars()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Reloads the list, keeping the selection if that calendar still exists.
+    private func refreshCalendars() async {
+        do {
+            calendars = try await coordinator.calendar.writableCalendars()
+            if selectedCalendar == nil { selectRestoredCalendar() }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Preselects the calendar restored from iCloud after a reinstall, if it's in the list.
+    private func selectRestoredCalendar() {
+        let restoredID = coordinator.settings.destinationCalendar?.id
+        selectedCalendarID = calendars?.first { $0.id == restoredID }?.id
     }
 
     private func startSyncing() async {
