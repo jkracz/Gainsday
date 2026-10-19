@@ -13,6 +13,7 @@
     "Health" : {},
     "Health isn't available on this device, so Gainsday can't read your workouts." : {},
     "Health isn't available on this device." : {},
+    "If workouts don't show up, open the Health app, tap your profile, then Apps, and check what Gainsday can read." : {},
     "Last Sync" : {},
     "New Events" : {},
     "None" : {},
@@ -21,6 +22,7 @@
     "Syncing…" : {},
     "Turn on full calendar access for Gainsday in Settings, then try again." : {},
     "Workouts Since" : {},
+    "Workouts you started since %@ are added, as before." : {},
     "Workouts you finish appear in this calendar when you open Gainsday." : {},
     "Workouts you start from now on are added. Earlier workouts are left out." : {}
   },

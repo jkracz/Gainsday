@@ -48,6 +48,12 @@ final class SyncCoordinator {
 
     func load() async {
         settings = await settingsStore.load()
+        // The setup flag can come back from a device backup, and access can be revoked
+        // in Settings. Either way, setup has to ask again before syncing can work.
+        if hasFinishedSetupOnThisDevice, await calendar.accessMode() == .none {
+            UserDefaults.standard.removeObject(forKey: Self.setupKey)
+            hasFinishedSetupOnThisDevice = false
+        }
         hasLoaded = true
     }
 

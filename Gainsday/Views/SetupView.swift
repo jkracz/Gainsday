@@ -22,10 +22,13 @@ struct SetupView: View {
                 } header: {
                     Text("Health")
                 } footer: {
-                    if coordinator.health.isHealthDataAvailable {
-                        Text("Gainsday reads your workouts. It never writes to Health.")
-                    } else {
+                    if !coordinator.health.isHealthDataAvailable {
                         Text("Health isn't available on this device, so Gainsday can't read your workouts.")
+                    } else if healthRequested {
+                        // HealthKit never says whether read access was granted.
+                        Text("If workouts don't show up, open the Health app, tap your profile, then Apps, and check what Gainsday can read.")
+                    } else {
+                        Text("Gainsday reads your workouts. It never writes to Health.")
                     }
                 }
 
@@ -58,7 +61,11 @@ struct SetupView: View {
                     }
                     .disabled(!healthRequested || selectedCalendar == nil || isStarting)
                 } footer: {
-                    Text("Workouts you start from now on are added. Earlier workouts are left out.")
+                    if let restored = coordinator.settings.syncStartDate {
+                        Text("Workouts you started since \(restored, format: .dateTime.day().month().year()) are added, as before.")
+                    } else {
+                        Text("Workouts you start from now on are added. Earlier workouts are left out.")
+                    }
                 }
 
                 if let errorMessage {

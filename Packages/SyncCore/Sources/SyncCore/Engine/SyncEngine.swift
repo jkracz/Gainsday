@@ -66,17 +66,24 @@ public struct SyncEngine: Sendable {
         let draft = EventDraft(calendarID: calendarID, content: composer.content(for: workout), availability: .free)
         let event = try await calendar.create(draft)
         let now = clock.now
-        try await ledger.save(LedgerEntry(
-            workoutID: workout.id,
-            workoutStart: workout.start,
-            workoutEnd: workout.end,
-            state: .owned,
-            eventExternalIdentifier: event.id,
-            calendarID: event.calendarID,
-            written: event.content,
-            createdAt: now,
-            updatedAt: now
-        ))
+        do {
+            try await ledger.save(LedgerEntry(
+                workoutID: workout.id,
+                workoutStart: workout.start,
+                workoutEnd: workout.end,
+                state: .owned,
+                eventExternalIdentifier: event.id,
+                calendarID: event.calendarID,
+                written: event.content,
+                createdAt: now,
+                updatedAt: now
+            ))
+        } catch {
+            // An event with no ledger entry would be created again next pass, so undo it
+            // when possible. The save error is the one worth reporting.
+            try? await calendar.delete(eventID: event.id)
+            throw error
+        }
         return .create(workoutID: workout.id, draft)
     }
 }

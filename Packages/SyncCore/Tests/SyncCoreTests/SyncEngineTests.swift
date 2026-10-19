@@ -59,6 +59,19 @@ struct SyncEngineTests {
         #expect(entry.createdAt == SyncHarness.now)
     }
 
+    @Test("If the ledger can't record a new event, the event is removed so the next pass doesn't duplicate it")
+    func ledgerFailureRemovesEvent() async throws {
+        struct DiskFull: Error {}
+        let harness = SyncHarness(workouts: [SyncHarness.run()])
+        await harness.ledger.failSaves(with: DiskFull())
+
+        await #expect(throws: DiskFull.self) {
+            try await harness.engine.run(.changes(since: nil))
+        }
+
+        #expect(await harness.calendar.allEvents.isEmpty)
+    }
+
     @Test("A second pass from the stored anchor is a no-op")
     func secondPassIsNoOp() async throws {
         let harness = SyncHarness(workouts: [SyncHarness.run()])
