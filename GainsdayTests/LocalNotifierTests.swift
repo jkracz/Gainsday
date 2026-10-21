@@ -5,7 +5,7 @@ import Testing
 import UserNotifications
 @testable import Gainsday
 
-@Suite("Local notifier")
+@Suite("Local notifier", .serialized)
 struct LocalNotifierTests {
     /// Records requests instead of showing them, or fails as if notifications were off.
     final class FakeCenter: NotificationScheduling {
@@ -30,7 +30,13 @@ struct LocalNotifierTests {
     }
 
     let center = FakeCenter()
-    let defaults = UserDefaults(suiteName: "LocalNotifierTests.\(UUID().uuidString)")!
+    let defaults: UserDefaults
+
+    /// One suite, emptied before each test, so test runs don't leave files behind.
+    init() {
+        defaults = UserDefaults(suiteName: "LocalNotifierTests")!
+        defaults.removePersistentDomain(forName: "LocalNotifierTests")
+    }
 
     @Test("A problem is shown straight away with its own text, under a stable identifier")
     func showsProblem() async throws {
