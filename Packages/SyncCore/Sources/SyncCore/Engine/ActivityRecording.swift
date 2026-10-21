@@ -87,6 +87,8 @@ struct ActivityRecorder {
             entry.title = content.title
             // An adopted event's own Undo is on its adoption's log entry.
             entry.undo = previous?.state == .adopted ? nil : previous?.written.map { .restoreEvent($0) }
+        case .removeWorkoutSection(_, _, let content):
+            entry.title = content.title
         case .delete:
             if let written = previous?.written, let calendarID = previous?.calendarID {
                 entry.undo = .recreateEvent(EventDraft(calendarID: calendarID, content: written))
@@ -102,7 +104,7 @@ private extension SyncAction {
     var eventID: String? {
         switch self {
         case .update(_, let eventID, _), .delete(_, let eventID), .release(_, let eventID), .relink(_, let eventID),
-             .adopt(_, let eventID, _, _): eventID
+             .adopt(_, let eventID, _, _), .removeWorkoutSection(_, let eventID, _): eventID
         case .create, .skip, .holdForReview: nil
         }
     }

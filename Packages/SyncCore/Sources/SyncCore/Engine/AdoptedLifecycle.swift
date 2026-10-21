@@ -13,7 +13,7 @@ extension SyncEngine {
         content.notes = WorkoutSection.removing(from: content.notes, workoutID: entry.workoutID)
         let updated = try await calendar.update(eventID: eventID, to: content)
         try await ledger.delete(entryID: entry.id)
-        return .update(workoutID: workoutID, eventID: updated.id, updated.content)
+        return .removeWorkoutSection(workoutID: workoutID, eventID: updated.id, updated.content)
     }
 
     /// Writes `workout`'s times and section to an adopted event, keeping the user's title

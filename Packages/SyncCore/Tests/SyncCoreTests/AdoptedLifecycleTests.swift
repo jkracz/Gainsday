@@ -16,7 +16,7 @@ struct AdoptedLifecycleTests {
         #expect(await harness.calendar.allEvents.count == 1)
         #expect(event.id == planned.id)
         #expect(event.content == EventContent(title: "Run", start: workout.start, end: workout.end, notes: "Bring gels"))
-        #expect(result.actions == [.update(workoutID: workout.id, eventID: planned.id, event.content)])
+        #expect(result.actions == [.removeWorkoutSection(workoutID: workout.id, eventID: planned.id, event.content)])
         #expect(await harness.ledger.allEntries.isEmpty)
     }
 
@@ -38,7 +38,7 @@ struct AdoptedLifecycleTests {
             end: workout.end,
             notes: "Felt great\nBring gels\nShoes: Pegasus"
         ))
-        #expect(result.actions == [.update(workoutID: workout.id, eventID: planned.id, event.content)])
+        #expect(result.actions == [.removeWorkoutSection(workoutID: workout.id, eventID: planned.id, event.content)])
     }
 
     @Test("Moving the event or editing its workout section makes the app let go of it", arguments: [
@@ -161,7 +161,9 @@ struct AdoptedUndoTests {
         let entry = try #require(await harness.activityLog.entries.first)
         await harness.workouts.delete(workout.id)
         _ = try await harness.engine.run(.changes(since: anchor))
-        #expect(await harness.activityLog.entries.first?.undo == nil)
+        let removal = try #require(await harness.activityLog.entries.first)
+        #expect(removal.title == "Run")
+        #expect(removal.undo == nil)
 
         try await harness.engine.undo(entryID: entry.id, choice: .separateEvent)
 

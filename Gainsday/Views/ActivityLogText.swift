@@ -13,6 +13,7 @@ extension SyncAction {
         case .relink: "Found in your calendar and linked again, so it isn't added twice"
         case .skip(_, let reason): reason.logDescription
         case .adopt(_, _, _, let decider): decider.logDescription
+        case .removeWorkoutSection: "Removed the workout details from your planned event"
         }
     }
 }
