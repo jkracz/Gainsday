@@ -90,6 +90,8 @@
     "If you let Gainsday read only the past 30 days of Health data, older workouts can't be added." : {},
     "Last Sync" : {},
     "Left alone from now on because you edited the event" : {},
+    "Matched to your planned event by its title, and updated with the workout" : {},
+    "Matched to your planned event by the on-device model, and updated with the workout" : {},
     "Minimal" : {},
     "Minimum Duration" : {},
     "New Events" : {},

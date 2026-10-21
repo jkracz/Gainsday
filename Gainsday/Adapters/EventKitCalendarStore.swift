@@ -79,6 +79,11 @@ actor EventKitCalendarStore: CalendarStore {
         store.refreshSourcesIfNecessary()
     }
 
+    func defaultCalendarID() async -> String? {
+        guard await accessMode() == .full else { return nil }
+        return store.defaultCalendarForNewEvents?.calendarIdentifier
+    }
+
     private func requireFullAccess() async throws {
         switch await accessMode() {
         case .full: return
@@ -119,7 +124,8 @@ actor EventKitCalendarStore: CalendarStore {
             isAllDay: event.isAllDay,
             attendeeCount: event.attendees?.count ?? 0,
             isDeclinedByUser: event.attendees?.contains { $0.isCurrentUser && $0.participantStatus == .declined } ?? false,
-            lastModified: event.lastModifiedDate
+            lastModified: event.lastModifiedDate,
+            isRecurring: event.hasRecurrenceRules
         )
     }
 
