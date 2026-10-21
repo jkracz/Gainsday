@@ -40,7 +40,7 @@ public struct SyncEngine: Sendable {
                 return SyncResult()
             }
             let changes = try await workouts.changes(since: anchor)
-            let composer = EventComposer(locale: clock.locale, footerEnabled: settings.footerEnabled)
+            let composer = EventComposer(settings: settings, clock: clock)
             var actions: [SyncAction] = []
             for workout in changes.added.sorted(by: { $0.start < $1.start }) {
                 actions.append(try await sync(workout, to: destination.id, since: syncStartDate, composer: composer))
