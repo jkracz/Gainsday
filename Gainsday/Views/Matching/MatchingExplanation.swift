@@ -103,7 +103,7 @@ private struct MatchingExplanationSheet: View {
                     Button("Not Now") { dismiss() }
                 }
             }
-            .safeAreaInset(edge: .bottom) {
+            .safeAreaBar(edge: .bottom) {
                 Button {
                     MatchingExplanation.hasTurnedOnMatching = true
                     turnOn()
