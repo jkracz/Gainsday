@@ -41,6 +41,9 @@ final class SyncCoordinator {
     /// How long the app waits for a pass, including the iCloud import wait,
     /// before showing an error.
     static let passTimeout: Duration = .seconds(90)
+    /// How long launch waits for settings, calendar access and the activity log before
+    /// showing the app anyway. What arrives later still updates it.
+    static let loadTimeout: Duration = .seconds(10)
     private static let setupKey = "hasFinishedSetupOnThisDevice"
 
     var isSetUp: Bool {
@@ -66,7 +69,18 @@ final class SyncCoordinator {
         UNUserNotificationCenter.current().delegate = notifier
     }
 
+    /// Loads the state the UI shows. A system service that hangs can't keep the app on
+    /// its loading screen: after `loadTimeout` it shows what it has, and an error.
     func load() async {
+        do {
+            try await withTimeout(Self.loadTimeout) { await self.loadState() }
+        } catch {
+            lastError = error.localizedDescription
+        }
+        hasLoaded = true
+    }
+
+    private func loadState() async {
         settings = await settingsStore.load()
         calendarAccess = await calendar.accessMode()
         await refreshActivityLog()
@@ -76,7 +90,6 @@ final class SyncCoordinator {
             await engine.report(.calendarAccessRevoked)
             forgetSetup()
         }
-        hasLoaded = true
     }
 
     /// Reloads settings whenever iCloud delivers a change, since settings restored
