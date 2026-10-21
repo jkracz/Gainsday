@@ -34,17 +34,20 @@ extension SyncEngine {
     /// Re-reads the event's external identifier, which a server sync can change, and
     /// fixes it in the ledger. The stored identifier is only a hint: when no event in
     /// the entry's calendar has it, the event is found by footer or by what the app wrote.
-    func correctExternalIdentifier(of entry: LedgerEntry) async throws {
+    /// Returns the entry as it is now in the ledger.
+    @discardableResult
+    func correctExternalIdentifier(of entry: LedgerEntry) async throws -> LedgerEntry {
         guard entry.state == .owned || entry.state == .adopted,
               let calendarID = entry.calendarID,
-              await calendar.accessMode() == .full else { return }
+              await calendar.accessMode() == .full else { return entry }
         let expected = entry.written ?? EventContent(title: "", start: entry.workoutStart, end: entry.workoutEnd)
         guard let event = try await findOwnEvent(for: entry.workoutID, matching: expected, in: calendarID, knownID: entry.eventExternalIdentifier),
-              event.id != entry.eventExternalIdentifier else { return }
+              event.id != entry.eventExternalIdentifier else { return entry }
         var corrected = entry
         corrected.eventExternalIdentifier = event.id
         corrected.updatedAt = clock.now
         try await ledger.save(corrected)
+        return corrected
     }
 
     /// The app's event for the workout in the calendar, during `expected`'s times:

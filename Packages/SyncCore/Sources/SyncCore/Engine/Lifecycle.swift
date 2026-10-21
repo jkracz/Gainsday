@@ -20,23 +20,25 @@ extension SyncEngine {
         var actions: [SyncAction] = []
         var remaining = changes.added
         for deletedID in changes.deletedIDs {
-            for entry in try await ledger.entries(forWorkout: deletedID) where entry.state == .owned {
-                let survivors = entry.memberIDs.subtracting(changes.deletedIDs)
-                if !survivors.isEmpty {
-                    // Another copy of the workout is still in Health, so the event stays.
-                    var entry = entry
-                    entry.remove(deletedID, keeping: survivors)
-                    entry.updatedAt = clock.now
-                    try await ledger.save(entry)
-                    continue
-                }
-                var replacement: Workout?
-                if let index = try await replacementIndex(for: entry, in: remaining) {
-                    replacement = remaining.remove(at: index)
-                }
-                if let action = try await follow(deletedID, in: entry, replacedBy: replacement, composer: composer) {
-                    actions.append(action)
-                }
+            // Collapse iCloud duplicates and fix a changed identifier first, so an event
+            // that's still there isn't mistaken for one the user deleted.
+            guard let resolved = try await resolvedEntry(forWorkout: deletedID), resolved.state == .owned else { continue }
+            let entry = try await correctExternalIdentifier(of: resolved)
+            let survivors = entry.memberIDs.subtracting(changes.deletedIDs)
+            if !survivors.isEmpty {
+                // Another copy of the workout is still in Health, so the event stays.
+                var entry = entry
+                entry.remove(deletedID, keeping: survivors)
+                entry.updatedAt = clock.now
+                try await ledger.save(entry)
+                continue
+            }
+            var replacement: Workout?
+            if let index = try await replacementIndex(for: entry, in: remaining) {
+                replacement = remaining.remove(at: index)
+            }
+            if let action = try await follow(deletedID, in: entry, replacedBy: replacement, composer: composer) {
+                actions.append(action)
             }
         }
         return (actions, remaining)
