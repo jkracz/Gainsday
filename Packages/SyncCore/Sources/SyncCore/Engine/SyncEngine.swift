@@ -35,7 +35,7 @@ public struct SyncEngine: Sendable {
         switch trigger {
         case .changes(let anchor):
             let settings = await settings.load()
-            guard let destination = settings.destinationCalendar, let syncStartDate = settings.syncStartDate else {
+            guard let destination = settings.destinationCalendar, settings.syncStartDate != nil else {
                 // Setup isn't finished: leave Health unread so the anchor doesn't move.
                 return SyncResult()
             }
@@ -43,7 +43,7 @@ public struct SyncEngine: Sendable {
             let composer = EventComposer(locale: clock.locale, footerEnabled: settings.footerEnabled)
             var actions: [SyncAction] = []
             for workout in changes.added.sorted(by: { $0.start < $1.start }) {
-                actions.append(try await sync(workout, to: destination.id, since: syncStartDate, composer: composer))
+                actions.append(try await sync(workout, to: destination.id, settings: settings, composer: composer))
             }
             return SyncResult(actions: actions, nextAnchor: changes.anchor)
         case .backfill(let interval, _):
@@ -52,9 +52,9 @@ public struct SyncEngine: Sendable {
         }
     }
 
-    private func sync(_ workout: Workout, to calendarID: String, since syncStartDate: Date, composer: EventComposer) async throws -> SyncAction {
-        guard workout.start >= syncStartDate else {
-            return .skip(workoutID: workout.id, .beforeSyncStartDate)
+    private func sync(_ workout: Workout, to calendarID: String, settings: Settings, composer: EventComposer) async throws -> SyncAction {
+        if let reason = settings.skipReason(for: workout) {
+            return .skip(workoutID: workout.id, reason)
         }
         let entries = try await ledger.entries(forWorkout: workout.id)
         if !entries.isEmpty {
