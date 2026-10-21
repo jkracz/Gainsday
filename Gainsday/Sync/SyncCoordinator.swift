@@ -66,12 +66,6 @@ final class SyncCoordinator {
         }
     }
 
-    /// Applies a change to the settings and backs them up to iCloud.
-    func updateSettings(_ change: (inout Settings) -> Void) async {
-        change(&settings)
-        await settingsStore.save(settings)
-    }
-
     /// Saves the destination and starts syncing workouts from now on. A sync start
     /// date restored from iCloud is kept, so a reinstall doesn't skip workouts.
     func finishSetup(destination: CalendarInfo) async {

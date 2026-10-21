@@ -68,10 +68,10 @@ struct TemplateEditorView: View {
             guard hasLoaded, template != coordinator.settings.template else { return }
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
-            await save()
+            save()
         }
         .onDisappear {
-            Task { await save() }
+            save()
         }
     }
 
@@ -82,10 +82,10 @@ struct TemplateEditorView: View {
         hasLoaded = true
     }
 
-    private func save() async {
+    private func save() {
         let template = template
         guard hasLoaded, template != coordinator.settings.template else { return }
-        await coordinator.updateSettings { $0.template = template }
+        coordinator.updateSettings { $0.template = template }
     }
 
     private func apply(_ template: EventTemplate) {
@@ -146,5 +146,12 @@ extension StarterTemplate {
         case .detailed: "Detailed"
         case .runner: "Runner"
         }
+    }
+}
+
+/// A row that opens the template editor, shared by the status and settings screens.
+struct TemplateEditorLink: View {
+    var body: some View {
+        NavigationLink("Event Template") { TemplateEditorView() }
     }
 }

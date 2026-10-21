@@ -20,7 +20,7 @@ struct StatusView: View {
                 }
 
                 Section {
-                    NavigationLink("Event Template") { TemplateEditorView() }
+                    TemplateEditorLink()
                 }
 
                 Section("Last Sync") {
