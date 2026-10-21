@@ -34,6 +34,9 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
     public var preUpdate: EventContent?
     public var createdAt: Date
     public var updatedAt: Date
+    /// The cluster's activity type, so a replacement can be told apart from a
+    /// different workout. Nil for entries written before it was recorded.
+    public var activityType: WorkoutActivityType?
 
     public init(
         id: UUID = UUID(),
@@ -47,7 +50,8 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
         written: EventContent? = nil,
         preUpdate: EventContent? = nil,
         createdAt: Date,
-        updatedAt: Date
+        updatedAt: Date,
+        activityType: WorkoutActivityType? = nil
     ) {
         self.id = id
         self.workoutID = workoutID
@@ -61,6 +65,7 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
         self.preUpdate = preUpdate
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.activityType = activityType
     }
 
     /// Whether this entry is about the given workout, either as the cluster or as a member.

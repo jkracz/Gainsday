@@ -41,8 +41,9 @@ public struct SyncEngine: Sendable {
             }
             let changes = try await workouts.changes(since: anchor)
             let composer = EventComposer(locale: clock.locale, footerEnabled: settings.footerEnabled)
-            var actions: [SyncAction] = []
-            for workout in changes.added.sorted(by: { $0.start < $1.start }) {
+            let followed = try await followDeletions(in: changes, composer: composer)
+            var actions = followed.actions
+            for workout in followed.remaining.sorted(by: { $0.start < $1.start }) {
                 actions.append(try await sync(workout, to: destination.id, since: syncStartDate, composer: composer))
             }
             return SyncResult(actions: actions, nextAnchor: changes.anchor)
@@ -76,7 +77,8 @@ public struct SyncEngine: Sendable {
                 calendarID: event.calendarID,
                 written: event.content,
                 createdAt: now,
-                updatedAt: now
+                updatedAt: now,
+                activityType: workout.activityType
             ))
         } catch {
             // An event with no ledger entry would be created again next pass, so undo it
