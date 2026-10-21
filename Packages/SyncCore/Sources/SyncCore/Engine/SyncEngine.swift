@@ -52,7 +52,7 @@ public struct SyncEngine: Sendable {
             let changes = try await readChanges(since: anchor)
             let recorder = try await ActivityRecorder(engine: self, added: changes.added, deletedIDs: changes.deletedIDs)
             let composer = EventComposer(settings: settings, clock: clock)
-            let linked = try await linkEventsAddedWithoutReadAccess()
+            let linked = try await linkEventsAddedWithoutReadAccess(settings: settings, composer: composer)
             // A copy from an app the allowlist leaves out never replaces a deleted workout.
             let (allowed, notAllowed) = settings.splitBySource(changes.added)
             let skipped = notAllowed.map { SyncAction.skip(workoutID: $0.id, .sourceNotAllowed) }

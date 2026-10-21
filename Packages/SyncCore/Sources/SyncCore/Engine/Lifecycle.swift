@@ -156,7 +156,10 @@ extension SyncEngine {
         do {
             event = try await calendar.event(withID: eventID)
         } catch CalendarStoreError.requiresFullAccess {
-            // Keep the entry, which may now point at a replacement, so the event isn't created a second time.
+            // Keep the entry, which may now point at a replacement, so the event isn't
+            // created a second time. Upgrading to full access applies the change.
+            entry.needsLinking = true
+            entry.needsHealthFollowUp = true
             try await ledger.save(entry)
             return .skip(workoutID: workoutID, .requiresFullAccess)
         }

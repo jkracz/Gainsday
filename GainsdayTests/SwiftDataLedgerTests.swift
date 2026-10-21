@@ -29,7 +29,9 @@ struct SwiftDataLedgerTests {
 
     @Test("An entry comes back exactly as it was saved")
     func roundTrip() async throws {
-        let entry = Self.entry(memberIDs: [UUID()], start: .now)
+        var entry = Self.entry(memberIDs: [UUID()], start: .now)
+        entry.needsLinking = true
+        entry.needsHealthFollowUp = true
 
         try await ledger.save(entry)
 
