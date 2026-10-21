@@ -43,7 +43,7 @@ struct TemplateEditorView: View {
             } header: {
                 Text("Placeholders")
             } footer: {
-                Text("Tap a placeholder to add it at the cursor. A notes line, or a title part between ` · `, is left out when one of its values is missing.")
+                Text("Tap a placeholder to add it at the cursor. Notes lines and title parts with a missing value are left out.")
             }
 
             TemplatePreviewSection(template: template)

@@ -7,7 +7,8 @@ extension Workout {
     public static func sample(_ type: WorkoutActivityType, endingAt end: Date) -> Workout {
         let sample = SampleValues.of(type)
         return Workout(
-            id: UUID(uuidString: String(format: "00000000-0000-4000-8000-%012X", type.rawValue))!,
+            // A fixed id per type, so the preview's footer looks like a real one.
+            id: UUID(uuidString: String(format: "5A3E%04X-0000-4000-8000-000000000000", type.rawValue))!,
             activityType: type,
             start: end.addingTimeInterval(-sample.minutes * 60),
             end: end,

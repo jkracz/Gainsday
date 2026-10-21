@@ -32,7 +32,7 @@
     "Start From" : {},
     "Start Syncing" : {},
     "Syncing…" : {},
-    "Tap a placeholder to add it at the cursor. A notes line, or a title part between ` · `, is left out when one of its values is missing." : {},
+    "Tap a placeholder to add it at the cursor. Notes lines and title parts with a missing value are left out." : {},
     "Title" : {},
     "Turn on full calendar access for Gainsday in Settings, then try again." : {},
     "Workout" : {},
