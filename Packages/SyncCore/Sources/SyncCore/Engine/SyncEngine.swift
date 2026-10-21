@@ -28,9 +28,10 @@ public struct SyncEngine: Sendable {
 
     /// Runs one sync pass.
     ///
-    /// The sync rules are added feature by feature. For now a changes pass creates an
-    /// owned event for each new workout since the sync start date that the ledger
-    /// doesn't know yet, and ignores deletions. Backfill reads its inputs and takes no actions.
+    /// The sync rules are added feature by feature. For now a changes pass first follows
+    /// Health deletes and replacements (see `followDeletions`), then creates an owned
+    /// event for each new workout since the sync start date that the ledger doesn't
+    /// know yet. Backfill reads its inputs and takes no actions.
     public func run(_ trigger: SyncTrigger) async throws -> SyncResult {
         switch trigger {
         case .changes(let anchor):

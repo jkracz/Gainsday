@@ -197,6 +197,28 @@ struct LifecycleTests {
         #expect(fromScratch.actions == [.skip(workoutID: replacement.id, .alreadySynced)])
         #expect(await harness.calendar.allEvents.count == 1)
     }
+
+    @Test("Deleting one workout of a cluster keeps the event while another member is still in Health")
+    func clusterMemberDeleteKeepsEvent() async throws {
+        let watchRun = SyncHarness.run()
+        let stravaCopy = UUID()
+        let harness = SyncHarness(workouts: [watchRun])
+        let first = try await harness.engine.run(.changes(since: nil))
+        var entry = try #require(await harness.ledger.allEntries.first)
+        entry.memberIDs.insert(stravaCopy)
+        try await harness.ledger.save(entry)
+        let event = try #require(await harness.calendar.allEvents.first)
+
+        await harness.workouts.delete(watchRun.id)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions.isEmpty)
+        #expect(await harness.calendar.allEvents == [event])
+        let kept = try #require(await harness.ledger.allEntries.first)
+        #expect(kept.state == .owned)
+        #expect(kept.workoutID == stravaCopy)
+        #expect(kept.covers(watchRun.id) == false)
+    }
 }
 
 extension SyncHarness {

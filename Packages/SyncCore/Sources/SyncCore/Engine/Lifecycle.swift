@@ -10,6 +10,7 @@ extension SyncEngine {
     /// Before touching an owned event, the engine compares it with what it last wrote.
     /// If the user edited it, the event is released and left alone from then on. If
     /// the user deleted it, the workout is tombstoned so it's never recreated.
+    /// Released and tombstoned entries are left alone; adopted events are [v1.1].
     ///
     /// Returns the actions taken and the added workouts that still need syncing.
     func followDeletions(
@@ -20,6 +21,15 @@ extension SyncEngine {
         var remaining = changes.added
         for deletedID in changes.deletedIDs {
             for entry in try await ledger.entries(forWorkout: deletedID) where entry.state == .owned {
+                let survivors = entry.memberIDs.subtracting(changes.deletedIDs)
+                if !survivors.isEmpty {
+                    // Another copy of the workout is still in Health, so the event stays.
+                    var entry = entry
+                    entry.remove(deletedID, keeping: survivors)
+                    entry.updatedAt = clock.now
+                    try await ledger.save(entry)
+                    continue
+                }
                 var replacement: Workout?
                 if let index = try await replacementIndex(for: entry, in: remaining) {
                     replacement = remaining.remove(at: index)
@@ -99,6 +109,14 @@ extension SyncEngine {
 }
 
 private extension LedgerEntry {
+    /// Drops a deleted member from the cluster, handing its identity to a survivor if needed.
+    mutating func remove(_ deletedID: UUID, keeping survivors: Set<UUID>) {
+        memberIDs.remove(deletedID)
+        if workoutID == deletedID, let survivor = survivors.min(by: { $0.uuidString < $1.uuidString }) {
+            workoutID = survivor
+        }
+    }
+
     /// Points the entry at the workout that replaced `deletedID` in Health.
     mutating func replace(_ deletedID: UUID, with replacement: Workout) {
         memberIDs.remove(deletedID)
