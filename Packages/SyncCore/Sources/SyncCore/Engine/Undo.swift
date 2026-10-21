@@ -27,6 +27,8 @@ extension SyncEngine {
             try await recreateEvent(draft, of: entry)
         case .restoreEvent(let content):
             try await restoreEvent(to: content, of: entry)
+        case .separateFromPlannedEvent(let draft, let createEntryID):
+            try await separateFromPlannedEvent(draft, of: entry, reenabling: createEntryID, in: &log)
         }
         entry.undoneAt = clock.now
         log[index] = entry

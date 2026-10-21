@@ -89,7 +89,7 @@ extension SyncEngine {
     /// Moves the planned event to the workout's times and puts the workout section in its
     /// notes, keeping the user's title and notes. The event before the update is kept in
     /// the ledger, for Undo and for when the workout is deleted.
-    private func adopt(_ event: CalendarEvent, for cluster: WorkoutCluster, decidedBy decider: MatchDecider, settings: Settings, composer: EventComposer) async throws -> SyncAction {
+    func adopt(_ event: CalendarEvent, for cluster: WorkoutCluster, decidedBy decider: MatchDecider, settings: Settings, composer: EventComposer) async throws -> SyncAction {
         let workout = cluster.preferred
         var content = event.content
         content.start = workout.start

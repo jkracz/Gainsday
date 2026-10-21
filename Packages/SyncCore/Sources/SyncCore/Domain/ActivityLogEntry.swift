@@ -60,6 +60,10 @@ extension ActivityLogEntry {
         case restoreEvent(EventContent)
         /// Undo a delete: create the event again as it was, and leave it alone afterwards.
         case recreateEvent(EventDraft)
+        /// Undo a match the user made from the log: put the planned event back as it was
+        /// and add the workout's separate event again. The create entry it was matched
+        /// from can be undone again afterwards. [v1.1]
+        case separateFromPlannedEvent(EventDraft, createEntryID: UUID)
     }
 }
 

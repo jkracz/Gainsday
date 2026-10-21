@@ -14,6 +14,8 @@ public enum MatchDecider: String, Hashable, Codable, Sendable {
     case rules
     /// The on-device model, asked about a case the rules found unclear.
     case model
+    /// The user, who chose the event with "Match to an event…" in the activity log.
+    case user
 }
 
 extension SyncAction {
