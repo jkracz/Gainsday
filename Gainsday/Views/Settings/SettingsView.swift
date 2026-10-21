@@ -11,6 +11,7 @@ struct SettingsView: View {
 
             Section {
                 WorkoutTypesLink()
+                SourcesLink()
                 Picker("Minimum Duration", selection: minimumDuration) {
                     ForEach(durationChoices, id: \.self) { seconds in
                         Text(Self.label(forMinimum: seconds)).tag(seconds)

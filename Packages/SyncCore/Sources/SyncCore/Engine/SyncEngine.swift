@@ -53,35 +53,43 @@ public struct SyncEngine: Sendable {
             let recorder = try await ActivityRecorder(engine: self, added: changes.added, deletedIDs: changes.deletedIDs)
             let composer = EventComposer(settings: settings, clock: clock)
             let linked = try await linkEventsAddedWithoutReadAccess()
-            let followed = try await followDeletions(in: changes, settings: settings, composer: composer)
+            // A copy from an app the allowlist leaves out never replaces a deleted workout.
+            let (allowed, notAllowed) = settings.splitBySource(changes.added)
+            let skipped = notAllowed.map { SyncAction.skip(workoutID: $0.id, .sourceNotAllowed) }
+            let followed = try await followDeletions(
+                in: WorkoutChanges(added: allowed, deletedIDs: changes.deletedIDs, anchor: changes.anchor),
+                settings: settings,
+                composer: composer
+            )
             let added = try await syncAdded(followed.remaining, to: destination.id, settings: settings, composer: composer)
-            return await recorder.record(SyncResult(actions: linked + followed.actions + added, nextAnchor: changes.anchor))
+            return await recorder.record(SyncResult(actions: linked + skipped + followed.actions + added, nextAnchor: changes.anchor))
         case .backfill(let interval, let mode):
             return try await backfill(interval, mode: mode)
         }
     }
 
-    func sync(_ workout: Workout, to calendarID: String, settings: Settings, composer: EventComposer) async throws -> SyncAction {
+    func sync(_ cluster: WorkoutCluster, to calendarID: String, settings: Settings, composer: EventComposer) async throws -> SyncAction {
+        let workout = cluster.preferred
         if let reason = settings.skipReason(for: workout) {
             return .skip(workoutID: workout.id, reason)
         }
-        if let entry = try await resolvedEntry(forWorkout: workout.id) {
-            try await correctExternalIdentifier(of: entry)
-            return .skip(workoutID: workout.id, entry.state == .tombstoned ? .tombstoned : .alreadySynced)
+        if let entry = try await existingEntry(for: cluster) {
+            return try await join(cluster, to: entry, settings: settings, composer: composer)
         }
-        if let relinked = try await relinkEarlierEvent(for: workout, in: calendarID, composer: composer) {
+        if let relinked = try await relinkEarlierEvent(for: cluster, in: calendarID, composer: composer) {
             return relinked
         }
 
         let draft = EventDraft(calendarID: calendarID, content: composer.content(for: workout), availability: .free)
         if await calendar.accessMode() == .addOnly {
-            return try await createWithoutReadAccess(for: workout, draft)
+            return try await createWithoutReadAccess(for: cluster, draft)
         }
         let event = try await createEvent(draft)
         let now = clock.now
         do {
             try await ledger.save(LedgerEntry(
                 workoutID: workout.id,
+                memberIDs: cluster.memberIDs,
                 workoutStart: workout.start,
                 workoutEnd: workout.end,
                 state: .owned,

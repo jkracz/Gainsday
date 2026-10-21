@@ -4,13 +4,15 @@ import Foundation
 /// update or delete them, so the ledger is the only way to avoid duplicates. Entries
 /// written then are marked `needsLinking`.
 extension SyncEngine {
-    /// Creates the workout's event in add-only mode. The ledger entry is saved first:
-    /// the app can't remove an event in this mode, so an event the ledger didn't know
-    /// about would be created again on the next pass.
-    func createWithoutReadAccess(for workout: Workout, _ draft: EventDraft) async throws -> SyncAction {
+    /// Creates the cluster's event in add-only mode. The ledger entry, holding every
+    /// member, is saved first: the app can't remove an event in this mode, so an event
+    /// the ledger didn't know about would be created again on the next pass.
+    func createWithoutReadAccess(for cluster: WorkoutCluster, _ draft: EventDraft) async throws -> SyncAction {
+        let workout = cluster.preferred
         let now = clock.now
         var entry = LedgerEntry(
             workoutID: workout.id,
+            memberIDs: cluster.memberIDs,
             workoutStart: workout.start,
             workoutEnd: workout.end,
             state: .owned,
@@ -53,7 +55,7 @@ extension SyncEngine {
             entry.needsLinking = false
             if entry.state == .owned, let calendarID = entry.calendarID,
                let expected = entry.written,
-               let event = try await findOwnEvent(for: entry.workoutID, matching: expected, in: calendarID, knownID: entry.eventExternalIdentifier),
+               let event = try await findOwnEvent(for: entry.memberIDs.union([entry.workoutID]), matching: expected, in: calendarID, knownID: entry.eventExternalIdentifier),
                event.id != entry.eventExternalIdentifier {
                 entry.eventExternalIdentifier = event.id
                 actions.append(.relink(workoutID: entry.workoutID, eventID: event.id))
