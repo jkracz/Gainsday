@@ -20,12 +20,15 @@ final class SyncCoordinator {
     var isSyncing = false
     var lastPass: Pass?
     var lastError: String?
+    /// The activity log, newest first.
+    private(set) var activityLog: [ActivityLogEntry] = []
 
     let health: HealthKitWorkoutSource
     let calendar: EventKitCalendarStore
     private let settingsStore: CloudSettingsStore
     private let anchors: AnchorStore
     let cloudImport = CloudImportMonitor()
+    private let activityLogStore: FileActivityLogStore
     let clock = SystemClock()
     private let notifier = LocalNotifier()
     let engine: SyncEngine
@@ -40,6 +43,7 @@ final class SyncCoordinator {
         calendar = EventKitCalendarStore()
         settingsStore = CloudSettingsStore()
         anchors = AnchorStore()
+        activityLogStore = FileActivityLogStore()
         engine = SyncEngine(
             workouts: health,
             calendar: calendar,
@@ -47,13 +51,15 @@ final class SyncCoordinator {
             settings: settingsStore,
             judge: UnavailableMatchJudge(),
             clock: clock,
-            notifier: notifier
+            notifier: notifier,
+            activityLog: activityLogStore
         )
         UNUserNotificationCenter.current().delegate = notifier
     }
 
     func load() async {
         settings = await settingsStore.load()
+        await refreshActivityLog()
         // The setup flag can come back from a device backup, and access can be revoked
         // in Settings. Either way, setup has to ask again before syncing can work.
         if hasFinishedSetupOnThisDevice, await calendar.accessMode() == .none {
@@ -114,6 +120,20 @@ final class SyncCoordinator {
         } catch {
             lastError = error.localizedDescription
         }
+        await refreshActivityLog()
+    }
+
+    /// Undoes an activity log entry. It counts as a pass, so it never runs alongside one.
+    func undo(_ entry: ActivityLogEntry) async throws {
+        guard !isSyncing else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        try await engine.undo(entryID: entry.id)
+        await refreshActivityLog()
+    }
+
+    func refreshActivityLog() async {
+        activityLog = (try? await activityLogStore.load()) ?? []
     }
 
     private func forgetSetup() {

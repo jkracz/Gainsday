@@ -22,6 +22,9 @@ struct StatusView: View {
                 Section {
                     TemplateEditorLink()
                     NavigationLink("Add Past Workouts") { BackfillView() }
+                    NavigationLink("Activity") {
+                        ActivityLogView()
+                    }
                 }
 
                 Section("Last Sync") {
