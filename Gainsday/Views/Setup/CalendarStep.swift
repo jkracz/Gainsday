@@ -7,7 +7,6 @@ struct CalendarStep: View {
     @Environment(SetupModel.self) private var model
 
     var body: some View {
-        @Bindable var model = model
         SetupStepLayout(
             title: "Calendar",
             systemImage: "calendar",
@@ -31,11 +30,9 @@ struct CalendarStep: View {
 
             if model.isAddOnly {
                 Section {
-                    Button { model.isChoosingAddOnlyCalendar = true } label: {
-                        LabeledContent("Calendar", value: model.selectedCalendar?.title ?? String(localized: "None"))
-                    }
+                    LabeledContent("Calendar", value: CalendarReference.defaultCalendar.displayTitle)
                 } footer: {
-                    Text("Gainsday can add events but can't see, change or delete them. You can give it full access later.")
+                    Text("With add-only access, iOS adds events to your default calendar and doesn't let Gainsday choose another. To use your workouts calendar, make it the default in Settings → Apps → Calendar, or give Gainsday full access later.")
                 }
             } else if let calendars = model.calendars {
                 Section("Your Calendars") {
@@ -59,12 +56,6 @@ struct CalendarStep: View {
                     }
                 }
             }
-        }
-        .sheet(isPresented: $model.isChoosingAddOnlyCalendar) {
-            CalendarChooser(selectedID: model.selectedCalendarID ?? coordinator.settings.destinationCalendar?.id) { chosen in
-                model.finishChoosingAddOnlyCalendar(chosen)
-            }
-            .ignoresSafeArea()
         }
     }
 }

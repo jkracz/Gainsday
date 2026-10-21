@@ -9,7 +9,7 @@ struct StatusView: View {
         NavigationStack {
             List {
                 Section {
-                    LabeledContent("Calendar", value: coordinator.settings.destinationCalendar?.title ?? "")
+                    LabeledContent("Calendar", value: coordinator.settings.destinationCalendar?.displayTitle ?? "")
                     if let syncStartDate = coordinator.settings.syncStartDate {
                         LabeledContent("Workouts Since") {
                             Text(syncStartDate, format: .dateTime.day().month().hour().minute())
@@ -40,8 +40,8 @@ struct StatusView: View {
                         LabeledContent("Finished") {
                             Text(pass.finishedAt, format: .dateTime.hour().minute())
                         }
-                        LabeledContent("New Events", value: pass.createdCount, format: .number)
                     }
+                    LabeledContent("Added Today", value: coordinator.activityLog.addedEventCount(on: coordinator.clock.now, in: coordinator.clock.calendar), format: .number)
                     if let error = coordinator.lastError {
                         Text(verbatim: error)
                             .foregroundStyle(.red)

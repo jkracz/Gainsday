@@ -44,7 +44,7 @@ extension SyncCoordinator {
     func backfill(_ interval: DateInterval) async throws -> BackfillCounts {
         let result = try await runBackfill(interval, mode: .commit)
         let counts = BackfillCounts(result)
-        lastPass = Pass(finishedAt: clock.now, createdCount: counts.newEventCount)
+        lastPass = Pass(finishedAt: clock.now)
         // The sync start date may have moved back.
         await load()
         await refreshActivityLog()

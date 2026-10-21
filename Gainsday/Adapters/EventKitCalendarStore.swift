@@ -53,8 +53,9 @@ actor EventKitCalendarStore: CalendarStore {
     }
 
     func create(_ draft: EventDraft) async throws -> CalendarEvent {
-        guard await accessMode() != .none else { throw CalendarStoreError.accessDenied }
-        guard let calendar = store.calendar(withIdentifier: draft.calendarID) else {
+        let mode = await accessMode()
+        guard mode != .none else { throw CalendarStoreError.accessDenied }
+        guard let calendar = calendar(withID: draft.calendarID) else {
             throw CalendarStoreError.calendarNotFound(id: draft.calendarID)
         }
         let event = EKEvent(eventStore: store)
@@ -64,7 +65,12 @@ actor EventKitCalendarStore: CalendarStore {
             event.availability = .free
         }
         try store.save(event, span: .thisEvent, commit: true)
-        return Self.calendarEvent(event)
+        var created = Self.calendarEvent(event)
+        if mode == .addOnly {
+            // The event's calendar is a stand-in that says nothing about where it went.
+            created.calendarID = draft.calendarID
+        }
+        return created
     }
 
     func update(eventID: String, to content: EventContent) async throws -> CalendarEvent {
@@ -88,6 +94,14 @@ actor EventKitCalendarStore: CalendarStore {
     func defaultCalendarID() async -> String? {
         guard await accessMode() == .full else { return nil }
         return store.defaultCalendarForNewEvents?.calendarIdentifier
+    }
+
+    /// With add-only access, `defaultCalendarForNewEvents` is a stand-in calendar that
+    /// saves to the user's default calendar. The calendar picked in `EKCalendarChooser`
+    /// is the same stand-in, and only sends events to the pick through the store that
+    /// showed the chooser, until the app quits. So add-only mode uses the default calendar.
+    private func calendar(withID id: String) -> EKCalendar? {
+        id == CalendarReference.defaultCalendarID ? store.defaultCalendarForNewEvents : store.calendar(withIdentifier: id)
     }
 
     private func requireFullAccess() async throws {
