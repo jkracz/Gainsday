@@ -36,7 +36,7 @@ extension SyncEngine {
         case .preview:
             return result
         case .commit:
-            return await ActivityRecorder(engine: self, added: found).record(result)
+            return await notifyHeldWorkouts(in: ActivityRecorder(engine: self, added: found).record(result))
         }
     }
 

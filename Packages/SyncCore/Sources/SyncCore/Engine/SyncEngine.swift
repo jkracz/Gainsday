@@ -62,7 +62,7 @@ public struct SyncEngine: Sendable {
                 composer: composer
             )
             let added = try await syncAdded(followed.remaining, to: destination.id, settings: settings, composer: composer)
-            return await recorder.record(SyncResult(actions: linked + skipped + followed.actions + added, nextAnchor: changes.anchor))
+            return await notifyHeldWorkouts(in: recorder.record(SyncResult(actions: linked + skipped + followed.actions + added, nextAnchor: changes.anchor)))
         case .backfill(let interval, let mode):
             return try await backfill(interval, mode: mode)
         }
