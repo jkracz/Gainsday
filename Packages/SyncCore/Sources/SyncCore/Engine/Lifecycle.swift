@@ -8,7 +8,8 @@ extension SyncEngine {
     /// one in the same pass, it replaces it: the existing event is updated in place.
     ///
     /// Before touching an owned event, the engine compares it with what it last wrote.
-    /// If the user edited it, the event is released and left alone from then on.
+    /// If the user edited it, the event is released and left alone from then on. If
+    /// the user deleted it, the workout is tombstoned so it's never recreated.
     ///
     /// Returns the actions taken and the added workouts that still need syncing.
     func followDeletions(
@@ -28,8 +29,15 @@ extension SyncEngine {
                     replacement = workout
                 }
                 let workoutID = replacement?.id ?? deletedID
-                let event = try await calendar.event(withID: eventID)
-                if let event, !event.content.matches(entry.written) {
+                guard let event = try await calendar.event(withID: eventID) else {
+                    // The user deleted the event: never create one for this workout again.
+                    entry.state = .tombstoned
+                    entry.updatedAt = clock.now
+                    try await ledger.save(entry)
+                    actions.append(.skip(workoutID: workoutID, .tombstoned))
+                    continue
+                }
+                if !event.content.matches(entry.written) {
                     entry.state = .released
                     entry.updatedAt = clock.now
                     try await ledger.save(entry)

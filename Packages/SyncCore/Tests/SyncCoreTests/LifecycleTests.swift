@@ -115,6 +115,48 @@ struct LifecycleTests {
         #expect(await harness.calendar.allEvents == [edited])
         #expect(await harness.ledger.allEntries.map(\.state) == [.released])
     }
+
+    @Test("An event the user deleted is tombstoned: a replacement doesn't recreate it, now or later")
+    func userDeleteTombstones() async throws {
+        let original = SyncHarness.run()
+        let harness = SyncHarness(workouts: [original])
+        let first = try await harness.engine.run(.changes(since: nil))
+        let event = try #require(await harness.calendar.allEvents.first)
+        await harness.calendar.remove(eventID: event.id)
+
+        let replacement = SyncHarness.run(minutes: 35, minutesAgo: 5)
+        await harness.workouts.delete(original.id)
+        await harness.workouts.add(replacement)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions == [.skip(workoutID: replacement.id, .tombstoned)])
+        #expect(await harness.calendar.allEvents.isEmpty)
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(await harness.ledger.allEntries.count == 1)
+        #expect(entry.state == .tombstoned)
+        #expect(entry.covers(replacement.id))
+
+        let fromScratch = try await harness.engine.run(.changes(since: nil))
+
+        #expect(fromScratch.actions == [.skip(workoutID: replacement.id, .tombstoned)])
+        #expect(await harness.calendar.allEvents.isEmpty)
+    }
+
+    @Test("Deleting a workout in Health whose event the user already deleted tombstones it and writes nothing")
+    func healthDeleteAfterUserDelete() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        let first = try await harness.engine.run(.changes(since: nil))
+        let event = try #require(await harness.calendar.allEvents.first)
+        await harness.calendar.remove(eventID: event.id)
+
+        await harness.workouts.delete(workout.id)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions == [.skip(workoutID: workout.id, .tombstoned)])
+        #expect(await harness.calendar.allEvents.isEmpty)
+        #expect(await harness.ledger.allEntries.map(\.state) == [.tombstoned])
+    }
 }
 
 extension SyncHarness {
