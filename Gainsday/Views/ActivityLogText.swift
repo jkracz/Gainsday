@@ -23,6 +23,7 @@ extension MatchDecider {
         switch self {
         case .rules: "Matched to your planned event by its title, and updated with the workout"
         case .model: "Matched to your planned event by the on-device model, and updated with the workout"
+        case .user: "Matched by you to your planned event, and updated with the workout"
         }
     }
 }
@@ -48,6 +49,7 @@ extension ActivityLogEntry.Undo {
         case .removeCreatedEvent: "Remove this event?"
         case .restoreEvent: "Put the event back as it was?"
         case .recreateEvent: "Add the event back?"
+        case .separateFromPlannedEvent: "Undo the match?"
         }
     }
 
@@ -56,6 +58,7 @@ extension ActivityLogEntry.Undo {
         case .removeCreatedEvent: "Gainsday deletes the event and won't add this workout again."
         case .restoreEvent: "Gainsday restores the event's earlier title, time and notes, and won't change it again."
         case .recreateEvent: "Gainsday adds the event again as it was, and won't change it again."
+        case .separateFromPlannedEvent: "Gainsday puts your planned event back as it was, and adds the workout's own event again."
         }
     }
 
@@ -64,6 +67,7 @@ extension ActivityLogEntry.Undo {
         case .removeCreatedEvent: "Remove Event"
         case .restoreEvent: "Restore Event"
         case .recreateEvent: "Add Event Back"
+        case .separateFromPlannedEvent: "Undo Match"
         }
     }
 }

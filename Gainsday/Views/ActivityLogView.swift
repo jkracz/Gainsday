@@ -6,6 +6,7 @@ struct ActivityLogView: View {
     @Environment(SyncCoordinator.self) private var coordinator
     @State private var confirming: ActivityLogEntry?
     @State private var undoFailed = false
+    @State private var matching: ActivityLogEntry?
 
     private var canUndo: Bool { coordinator.hasFullCalendarAccess && !coordinator.isSyncing }
 
@@ -22,6 +23,18 @@ struct ActivityLogView: View {
                     ActivityLogRow(entry: entry, canUndo: canUndo) {
                         confirming = entry
                     }
+                    .contextMenu {
+                        if entry.canMatchToEvent {
+                            RequiresFullAccess {
+                                Button("Match to an Event…", systemImage: "calendar.badge.checkmark") { matching = entry }
+                                    .disabled(coordinator.isSyncing)
+                            }
+                        }
+                    }
+                }
+            } footer: {
+                if coordinator.activityLog.contains(where: \.canMatchToEvent) {
+                    Text("If you planned a workout in your calendar but it got its own event, touch and hold the workout to match it to your plan.")
                 }
             }
         }
@@ -35,6 +48,9 @@ struct ActivityLogView: View {
             }
         }
         .navigationTitle("Activity")
+        .sheet(item: $matching) { entry in
+            MatchEventView(entry: entry)
+        }
         .confirmationDialog(
             confirming?.undo.map { Text($0.confirmationTitle) } ?? Text(verbatim: ""),
             isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
