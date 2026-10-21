@@ -78,12 +78,15 @@ struct ActivityRecorder {
             if let title = try? await engine.ledger.entries(forWorkout: workoutID).compactMap(\.written?.title).first {
                 entry.title = title
             }
-        case .adopt(_, _, let content, _):
-            // The planned event keeps the user's title. Undo comes with the adopted-event lifecycle.
+        case .adopt(let workoutID, _, let content, _):
+            // The planned event keeps the user's title.
             entry.title = content.title
+            entry.undo = try? await engine.ledger.entries(forWorkout: workoutID)
+                .compactMap(\.preUpdate).first.map { .restorePlannedEvent($0) }
         case .update(_, _, let content):
             entry.title = content.title
-            entry.undo = previous?.written.map { .restoreEvent($0) }
+            // An adopted event's own Undo is on its adoption's log entry.
+            entry.undo = previous?.state == .adopted ? nil : previous?.written.map { .restoreEvent($0) }
         case .delete:
             if let written = previous?.written, let calendarID = previous?.calendarID {
                 entry.undo = .recreateEvent(EventDraft(calendarID: calendarID, content: written))
