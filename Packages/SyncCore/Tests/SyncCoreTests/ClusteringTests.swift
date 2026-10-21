@@ -233,6 +233,58 @@ struct ClusteringTests {
         ])
         #expect(await harness.calendar.allEvents.isEmpty)
     }
+
+    @Test("A backfill merges Watch and Strava copies into one event, and repeating it adds nothing")
+    func backfillMergesCopies() async throws {
+        let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 3 * 24 * 60)
+        let stravaRun = SyncHarness.stravaCopy(of: watchRun)
+        let harness = SyncHarness(workouts: [stravaRun, watchRun])
+
+        let commit = try await harness.engine.run(.backfill(SyncHarness.lastDays(14), .commit))
+        let again = try await harness.engine.run(.backfill(SyncHarness.lastDays(14), .commit))
+
+        let event = try #require(await harness.calendar.allEvents.first)
+        #expect(await harness.calendar.allEvents.count == 1)
+        #expect(event.content.notes?.hasSuffix(watchRun.shortID) == true)
+        #expect(commit.actions.map(\.createdWorkoutID) == [watchRun.id])
+        #expect(again.actions == [.skip(workoutID: watchRun.id, .alreadySynced)])
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(await harness.ledger.allEntries.count == 1)
+        #expect(entry.covers(stravaRun.id))
+    }
+
+    @Test("A backfill skips copies from apps the allowlist leaves out")
+    func backfillSkipsDisallowedSources() async throws {
+        let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 3 * 24 * 60)
+        let stravaRun = SyncHarness.stravaCopy(of: watchRun)
+        var settings = SyncHarness.defaultSettings
+        settings.sourceAllowlist = [SyncHarness.strava.bundleIdentifier]
+        let harness = SyncHarness(workouts: [watchRun, stravaRun], settings: settings)
+
+        let commit = try await harness.engine.run(.backfill(SyncHarness.lastDays(14), .commit))
+
+        #expect(commit.actions.first == .skip(workoutID: watchRun.id, .sourceNotAllowed))
+        #expect(commit.actions.map(\.createdWorkoutID).compactMap { $0 } == [stravaRun.id])
+        #expect(await harness.calendar.allEvents.count == 1)
+    }
+
+    @Test("In add-only mode, Watch and Strava copies make one event whose ledger entry holds both")
+    func addOnlyRecordsEveryMember() async throws {
+        let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let stravaRun = SyncHarness.stravaCopy(of: watchRun)
+        let harness = SyncHarness(workouts: [stravaRun, watchRun], accessMode: .addOnly)
+
+        let first = try await harness.engine.run(.changes(since: nil))
+        let fromScratch = try await harness.engine.run(.changes(since: nil))
+
+        #expect(first.actions.map(\.createdWorkoutID) == [watchRun.id])
+        #expect(await harness.calendar.allEvents.count == 1)
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(await harness.ledger.allEntries.count == 1)
+        #expect(entry.needsLinking)
+        #expect(entry.covers(watchRun.id) && entry.covers(stravaRun.id))
+        #expect(fromScratch.actions == [.skip(workoutID: watchRun.id, .alreadySynced)])
+    }
 }
 
 extension SyncHarness {
