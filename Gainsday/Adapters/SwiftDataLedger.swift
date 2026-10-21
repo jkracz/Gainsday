@@ -25,6 +25,7 @@ nonisolated final class LedgerRecord {
     var updatedAt: Date = Date.distantPast
     /// The `WorkoutActivityType` raw value.
     var activityType: Int?
+    var needsLinking: Bool = false
 
     init(_ entry: LedgerEntry) {
         update(from: entry)
@@ -44,6 +45,7 @@ nonisolated final class LedgerRecord {
         createdAt = entry.createdAt
         updatedAt = entry.updatedAt
         activityType = entry.activityType.map { Int($0.rawValue) }
+        needsLinking = entry.needsLinking
     }
 
     var entry: LedgerEntry {
@@ -61,7 +63,8 @@ nonisolated final class LedgerRecord {
             preUpdate: preUpdate.flatMap { try? JSONDecoder().decode(EventContent.self, from: $0) },
             createdAt: createdAt,
             updatedAt: updatedAt,
-            activityType: activityType.flatMap { UInt(exactly: $0) }.map(WorkoutActivityType.init(rawValue:))
+            activityType: activityType.flatMap { UInt(exactly: $0) }.map(WorkoutActivityType.init(rawValue:)),
+            needsLinking: needsLinking
         )
     }
 }
@@ -91,6 +94,11 @@ actor SwiftDataLedger: Ledger {
         let descriptor = FetchDescriptor<LedgerRecord>(
             predicate: #Predicate { $0.workoutStart < end && $0.workoutEnd > start }
         )
+        return try modelContext.fetch(descriptor).map(\.entry)
+    }
+
+    func entriesNeedingLinking() async throws -> [LedgerEntry] {
+        let descriptor = FetchDescriptor<LedgerRecord>(predicate: #Predicate { $0.needsLinking })
         return try modelContext.fetch(descriptor).map(\.entry)
     }
 

@@ -46,6 +46,16 @@ struct SwiftDataLedgerTests {
         #expect(try await ledger.entries(forWorkout: UUID()).isEmpty)
     }
 
+    @Test("Only entries waiting for full access to link their event are listed as needing linking")
+    func findsEntriesNeedingLinking() async throws {
+        var pending = Self.entry(start: .now)
+        pending.needsLinking = true
+        try await ledger.save(pending)
+        try await ledger.save(Self.entry(start: .now))
+
+        #expect(try await ledger.entriesNeedingLinking() == [pending])
+    }
+
     @Test("Saving an entry with the same id replaces it")
     func saveReplaces() async throws {
         var entry = Self.entry(start: .now)

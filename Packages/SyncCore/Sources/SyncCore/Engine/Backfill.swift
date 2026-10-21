@@ -40,11 +40,14 @@ extension SyncEngine {
         }
     }
 
-    /// Syncs workouts Health added, oldest first.
+    /// Syncs workouts Health added, oldest first. Workouts from apps the allowlist
+    /// leaves out are skipped, and copies of one workout recorded by several apps
+    /// share one event.
     func syncAdded(_ added: [Workout], to calendarID: String, settings: Settings, composer: EventComposer) async throws -> [SyncAction] {
-        var actions: [SyncAction] = []
-        for workout in added.sorted(by: { $0.start < $1.start }) {
-            actions.append(try await sync(workout, to: calendarID, settings: settings, composer: composer))
+        let (allowed, notAllowed) = settings.splitBySource(added)
+        var actions = notAllowed.sorted { $0.start < $1.start }.map { SyncAction.skip(workoutID: $0.id, .sourceNotAllowed) }
+        for cluster in WorkoutCluster.clusters(of: allowed) {
+            actions.append(try await sync(cluster, to: calendarID, settings: settings, composer: composer))
         }
         return actions
     }
@@ -127,6 +130,10 @@ private actor DryRunLedger: Ledger {
     func entries(in interval: DateInterval) async throws -> [LedgerEntry] {
         overlaid(try await base.entries(in: interval))
             .filter { $0.workoutStart < interval.end && $0.workoutEnd > interval.start }
+    }
+
+    func entriesNeedingLinking() async throws -> [LedgerEntry] {
+        overlaid(try await base.entriesNeedingLinking()).filter(\.needsLinking)
     }
 
     func save(_ entry: LedgerEntry) async throws {

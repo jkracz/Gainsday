@@ -37,6 +37,10 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
     /// The cluster's activity type, so a replacement can be told apart from a
     /// different workout. Nil for entries written before it was recorded.
     public var activityType: WorkoutActivityType?
+    /// Set when the event was created with add-only access, so the app has never seen
+    /// it in the calendar and its identifier may be missing or out of date. The first
+    /// pass with full access finds the event and clears it.
+    public var needsLinking: Bool
 
     public init(
         id: UUID = UUID(),
@@ -51,7 +55,8 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
         preUpdate: EventContent? = nil,
         createdAt: Date,
         updatedAt: Date,
-        activityType: WorkoutActivityType? = nil
+        activityType: WorkoutActivityType? = nil,
+        needsLinking: Bool = false
     ) {
         self.id = id
         self.workoutID = workoutID
@@ -66,6 +71,7 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.activityType = activityType
+        self.needsLinking = needsLinking
     }
 
     /// Whether this entry is about the given workout, either as the cluster or as a member.
