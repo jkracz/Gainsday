@@ -57,6 +57,7 @@ public struct SyncEngine: Sendable {
             return .skip(workoutID: workout.id, .beforeSyncStartDate)
         }
         if let entry = try await resolvedEntry(forWorkout: workout.id) {
+            try await correctExternalIdentifier(of: entry)
             return .skip(workoutID: workout.id, entry.state == .tombstoned ? .tombstoned : .alreadySynced)
         }
         if let relinked = try await relinkEarlierEvent(for: workout, in: calendarID, composer: composer) {

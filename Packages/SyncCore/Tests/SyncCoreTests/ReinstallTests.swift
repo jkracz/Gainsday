@@ -189,6 +189,64 @@ struct ReinstallTests {
         #expect(remaining.map(\.id) == [survivor.id])
         #expect(remaining.first?.memberIDs == [workout.id, strava])
     }
+
+    @Test("When a server sync changes the event's external identifier, the ledger is corrected on a later pass")
+    func changedExternalIdentifierIsCorrected() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        _ = try await harness.engine.run(.changes(since: nil))
+        let original = try #require(await harness.calendar.allEvents.first)
+        await harness.calendar.changeIdentifier(of: original.id, to: "after-server-sync")
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        #expect(result.actions == [.skip(workoutID: workout.id, .alreadySynced)])
+        #expect(await harness.calendar.allEvents.map(\.id) == ["after-server-sync"])
+        #expect(await harness.ledger.allEntries.map(\.eventExternalIdentifier) == ["after-server-sync"])
+    }
+
+    @Test("With the footer off, a changed external identifier is corrected by matching what the app wrote")
+    func changedExternalIdentifierIsCorrectedWithoutFooter() async throws {
+        let workout = SyncHarness.run()
+        var settings = SyncHarness.defaultSettings
+        settings.footerEnabled = false
+        let harness = SyncHarness(workouts: [workout], settings: settings)
+        _ = try await harness.engine.run(.changes(since: nil))
+        let original = try #require(await harness.calendar.allEvents.first)
+        await harness.calendar.changeIdentifier(of: original.id, to: "after-server-sync")
+
+        _ = try await harness.engine.run(.changes(since: nil))
+
+        #expect(await harness.calendar.allEvents.count == 1)
+        #expect(await harness.ledger.allEntries.map(\.eventExternalIdentifier) == ["after-server-sync"])
+    }
+
+    @Test("An unchanged external identifier leaves the ledger entry untouched")
+    func unchangedExternalIdentifierLeavesLedgerAlone() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        let event = try await SyncHarness.eventLeftByEarlierInstall(for: workout)
+        await harness.calendar.put(event)
+        var entry = SyncHarness.ownedEntry(for: workout, eventID: event.id, updatedAt: SyncHarness.now.addingTimeInterval(-3600))
+        entry.written = event.content
+        try await harness.ledger.save(entry)
+        let before = await harness.ledger.allEntries
+
+        _ = try await harness.engine.run(.changes(since: nil))
+
+        #expect(await harness.ledger.allEntries == before)
+    }
+
+    @Test("In add-only mode a synced workout is skipped without reading the calendar")
+    func addOnlyModeSkipsIdentifierCheck() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout], accessMode: .addOnly)
+        _ = try await harness.engine.run(.changes(since: nil))
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        #expect(result.actions == [.skip(workoutID: workout.id, .alreadySynced)])
+    }
 }
 
 extension SyncHarness {
