@@ -42,6 +42,26 @@ struct HeldReviewTests {
         #expect(log[1].canAddAsSeparateEvent)
     }
 
+    @Test("A held workout the filters now leave out isn't added as a separate event, says why, and stays held")
+    func addHeldWorkoutTheFiltersLeaveOut() async throws {
+        let workout = SyncHarness.run(from: (12, 5), to: (13, 0), type: .traditionalStrengthTraining)
+        let (harness, held, gym) = try await SyncHarness.withHeldWorkout(workout)
+        var settings = await harness.settings.load()
+        settings.enabledTypes.remove(.traditionalStrengthTraining)
+        await harness.settings.save(settings)
+
+        await #expect(throws: ManualMatchError.notAdded(.typeDisabled)) {
+            try await harness.engine.addSeparateEvent(entryID: held.id)
+        }
+
+        #expect(await harness.calendar.allEvents == [gym])
+        #expect(await harness.ledger.allEntries.isEmpty)
+        let log = await harness.activityLog.entries
+        #expect(log.map(\.id) == [held.id])
+        #expect(log[0].isAwaitingReview)
+        #expect(log[0].canAddAsSeparateEvent)
+    }
+
     @Test("Adding a held workout as a separate event creates its own event and leaves the plan alone, and Undo holds it for review again")
     func addHeldWorkoutSeparately() async throws {
         let workout = SyncHarness.run(from: (12, 5), to: (13, 0), type: .traditionalStrengthTraining)

@@ -10,6 +10,8 @@ struct ActivityLogView: View {
     @State private var undoRefusedForEdit = false
     @State private var matching: ActivityLogEntry?
     @State private var addFailed = false
+    /// Why a held workout wasn't added, when the engine said.
+    @State private var notAddedReason: SkipReason?
 
     private var canUndo: Bool { coordinator.hasFullCalendarAccess && !coordinator.isSyncing }
 
@@ -91,7 +93,11 @@ struct ActivityLogView: View {
         .alert("Couldn't Add the Event", isPresented: $addFailed) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("The workout may have changed in Health. Try again later.")
+            if let notAddedReason {
+                Text(notAddedReason.logDescription)
+            } else {
+                Text("The workout may have changed in Health. Try again later.")
+            }
         }
         .alert("Couldn't Undo", isPresented: $undoFailed) {
             Button("OK", role: .cancel) {}
@@ -108,6 +114,11 @@ struct ActivityLogView: View {
         do {
             try await coordinator.addSeparateEvent(for: entry)
         } catch {
+            if case ManualMatchError.notAdded(let reason) = error {
+                notAddedReason = reason
+            } else {
+                notAddedReason = nil
+            }
             addFailed = true
         }
     }
