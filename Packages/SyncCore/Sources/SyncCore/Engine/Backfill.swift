@@ -14,6 +14,7 @@ extension SyncEngine {
         guard let destination = settings.destinationCalendar, let syncStartDate = settings.syncStartDate else {
             return SyncResult()
         }
+        try await checkCalendar(destination)
         let found = try await workouts.workouts(in: interval)
         if interval.start < syncStartDate {
             settings.syncStartDate = interval.start

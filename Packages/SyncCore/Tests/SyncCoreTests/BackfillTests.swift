@@ -127,6 +127,17 @@ struct BackfillTests {
         #expect(commit.actions[1].createdWorkoutID == new.id)
     }
 
+    @Test("With the destination calendar gone, a preview reports it instead of promising events")
+    func missingDestinationIsReported() async throws {
+        let harness = SyncHarness(workouts: [SyncHarness.run(minutesAgo: 2 * 24 * 60)])
+        await harness.calendar.removeCalendar(id: SyncHarness.destination.id)
+
+        await #expect(throws: CalendarStoreError.calendarNotFound(id: SyncHarness.destination.id)) {
+            try await harness.engine.run(.backfill(SyncHarness.lastDays(14), .preview))
+        }
+        #expect(await harness.notifier.notifications == [.destinationCalendarMissing])
+    }
+
     @Test("Before setup finishes, a backfill does nothing")
     func beforeSetupDoesNothing() async throws {
         var settings = SyncHarness.defaultSettings
