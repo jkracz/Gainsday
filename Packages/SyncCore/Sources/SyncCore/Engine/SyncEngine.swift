@@ -43,7 +43,7 @@ public struct SyncEngine: Sendable {
     public func run(_ trigger: SyncTrigger) async throws -> SyncResult {
         switch trigger {
         case .changes(let anchor):
-            let settings = await settings.load()
+            let settings = try await resolvingDefaultCalendar(in: await settings.load())
             guard let destination = settings.destinationCalendar, settings.syncStartDate != nil else {
                 // Setup isn't finished: leave Health unread so the anchor doesn't move.
                 return SyncResult()

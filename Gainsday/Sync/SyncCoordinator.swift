@@ -8,7 +8,6 @@ import UserNotifications
 final class SyncCoordinator {
     struct Pass {
         var finishedAt: Date
-        var createdCount: Int
     }
 
     private(set) var settings = Settings()
@@ -145,10 +144,11 @@ final class SyncCoordinator {
         // After a reinstall, give the ledger a chance to come back from iCloud first.
         _ = await cloudImport.waitForInitialImport()
         do {
-            let result = try await runner.syncChanges()
+            _ = try await runner.syncChanges()
             isWaitingForUnlock = false
-            let createdCount = result.actions.count { if case .create = $0 { true } else { false } }
-            lastPass = Pass(finishedAt: clock.now, createdCount: createdCount)
+            lastPass = Pass(finishedAt: clock.now)
+            // A pass after upgrading from add-only access names the default calendar.
+            settings = await settingsStore.load()
             lastError = nil
         } catch WorkoutSourceError.locked {
             isWaitingForUnlock = true

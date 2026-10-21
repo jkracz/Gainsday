@@ -54,6 +54,10 @@ extension SyncEngine {
         for pending in try await ledger.entriesNeedingLinking() {
             guard var entry = try await resolvedEntry(forWorkout: pending.workoutID), entry.needsLinking else { continue }
             entry.needsLinking = false
+            if entry.calendarID == CalendarReference.defaultCalendarID {
+                // It went to the default calendar, which the destination now names.
+                entry.calendarID = settings.destinationCalendar?.id
+            }
             if entry.state == .owned, let calendarID = entry.calendarID,
                let expected = entry.written,
                let event = try await findOwnEvent(for: entry.memberIDs.union([entry.workoutID]), matching: expected, in: calendarID, knownID: entry.eventExternalIdentifier),

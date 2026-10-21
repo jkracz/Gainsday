@@ -11,9 +11,8 @@ final class SetupModel {
     var calendars: [CalendarInfo]?
     var selectedCalendarID: String?
     var calendarAccessDenied = false
-    /// The user chose add-only access, so the system chooser picks the calendar.
+    /// The user chose add-only access, so events go to their default calendar.
     var isAddOnly = false
-    var isChoosingAddOnlyCalendar = false
     /// Whether workouts update matching planned events. Nil until the matching step's
     /// Continue, and when that step is skipped, which leaves the setting as it is.
     var enablesMatching: Bool?
@@ -66,25 +65,19 @@ final class SetupModel {
         }
     }
 
-    /// Add-only access can't list calendars, so the system chooser picks one.
+    /// With add-only access iOS adds events to the user's default calendar and doesn't
+    /// let the app choose another, so that's the destination.
     func requestAddOnlyAccess(_ coordinator: SyncCoordinator) async {
         do {
             calendarAccessDenied = !(try await coordinator.calendar.requestAddOnlyAccess())
             guard !calendarAccessDenied else { return }
             isAddOnly = true
-            isChoosingAddOnlyCalendar = true
+            let defaultCalendar = CalendarReference.defaultCalendar
+            calendars = [CalendarInfo(id: defaultCalendar.id, title: defaultCalendar.displayTitle)]
+            selectedCalendarID = defaultCalendar.id
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-
-    /// Keeps the calendar picked in the system chooser, or the previous one if it was cancelled.
-    func finishChoosingAddOnlyCalendar(_ chosen: CalendarInfo?) {
-        if let chosen {
-            calendars = [chosen]
-            selectedCalendarID = chosen.id
-        }
-        isChoosingAddOnlyCalendar = false
     }
 
     /// Reloads the list, keeping the selection if that calendar still exists.
