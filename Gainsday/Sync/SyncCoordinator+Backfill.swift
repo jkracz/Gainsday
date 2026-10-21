@@ -36,16 +36,21 @@ extension SyncCoordinator {
         }
     }
 
-    /// Runs a backfill pass once no other pass is running.
+    /// Runs a backfill pass once no other pass is running, waiting up to
+    /// `passTimeout` for one to finish.
     private func runBackfill(_ interval: DateInterval, mode: BackfillMode) async throws -> SyncResult {
-        while isSyncing {
+        let deadline = ContinuousClock.now + Self.passTimeout
+        while passes.isRunning, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(200))
         }
         isSyncing = true
         defer { isSyncing = false }
-        // After a reinstall, give the ledger a chance to come back from iCloud first.
-        _ = await cloudImport.waitForInitialImport()
-        return try await engine.run(.backfill(interval, mode))
+        // A long range takes longer than a catch-up pass.
+        return try await passes.run(timeout: Self.passTimeout * 2) {
+            // After a reinstall, give the ledger a chance to come back from iCloud first.
+            _ = await self.cloudImport.waitForInitialImport()
+            return try await self.engine.run(.backfill(interval, mode))
+        }
     }
 }
 

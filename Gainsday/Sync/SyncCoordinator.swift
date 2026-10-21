@@ -16,7 +16,7 @@ final class SyncCoordinator {
     /// Health and calendar permissions don't survive a reinstall, though settings
     /// restored from iCloud do, so setup runs once on every install.
     private(set) var hasFinishedSetupOnThisDevice = UserDefaults.standard.bool(forKey: setupKey)
-    /// Set while a pass or backfill runs, so they never overlap and create duplicates.
+    /// Set while the app waits for a pass or backfill. Shown as "Syncing…".
     var isSyncing = false
     var lastPass: Pass?
     var lastError: String?
@@ -29,6 +29,10 @@ final class SyncCoordinator {
     let clock = SystemClock()
     private let notifier = LocalNotifier()
     let engine: SyncEngine
+    /// Keeps passes from overlapping, so they can't create duplicates.
+    let passes = PassRunner()
+    /// Long enough for the iCloud import wait plus a normal pass.
+    static let passTimeout: Duration = .seconds(90)
     private static let setupKey = "hasFinishedSetupOnThisDevice"
 
     var isSetUp: Bool {
@@ -91,11 +95,20 @@ final class SyncCoordinator {
 
     /// Runs a catch-up pass from the stored anchor. Does nothing before setup, or
     /// while another pass is running, so overlapping triggers create no duplicates.
+    /// Shows an error if the pass takes longer than `passTimeout`.
     func sync() async {
         guard !isSyncing else { return }
         isSyncing = true
         defer { isSyncing = false }
+        do {
+            try await passes.run(timeout: Self.passTimeout) { await self.runPass() }
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
 
+    /// A pass that runs past its timeout still records its result when it finishes.
+    private func runPass() async {
         await load()
         guard isSetUp else { return }
         // After a reinstall, give the ledger a chance to come back from iCloud first.
