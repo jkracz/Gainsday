@@ -24,7 +24,7 @@ extension SyncEngine {
         try await ledger.save(entry)
         let event: CalendarEvent
         do {
-            event = try await calendar.create(draft)
+            event = try await createEvent(draft)
         } catch {
             try? await ledger.delete(entryID: entry.id)
             throw error

@@ -21,6 +21,12 @@ struct SettingsView: View {
             } footer: {
                 Text("Shorter workouts aren't added to your calendar.")
             }
+
+            Section {
+                TemplateEditorLink()
+            } header: {
+                Text("Events")
+            }
         }
         .navigationTitle("Settings")
     }

@@ -19,6 +19,10 @@ struct StatusView: View {
                     Text("Workouts you finish appear in this calendar when you open Gainsday.")
                 }
 
+                Section {
+                    TemplateEditorLink()
+                }
+
                 if !coordinator.hasFullCalendarAccess {
                     CalendarAccessSection()
                 }
