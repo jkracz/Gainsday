@@ -31,9 +31,10 @@ public struct SyncEngine: Sendable {
 
     /// Runs one sync pass.
     ///
-    /// The sync rules are added feature by feature. For now a changes pass creates an
-    /// owned event for each new workout since the sync start date that the ledger
-    /// doesn't know yet, and ignores deletions. Backfill reads its inputs and takes no actions.
+    /// The sync rules are added feature by feature. For now a changes pass first follows
+    /// Health deletes and replacements (see `followDeletions`), then creates an owned
+    /// event for each new workout since the sync start date that the ledger doesn't
+    /// know yet. Backfill reads its inputs and takes no actions.
     public func run(_ trigger: SyncTrigger) async throws -> SyncResult {
         switch trigger {
         case .changes(let anchor):
@@ -45,8 +46,9 @@ public struct SyncEngine: Sendable {
             try await checkCalendar(destination)
             let changes = try await readChanges(since: anchor)
             let composer = EventComposer(locale: clock.locale, footerEnabled: settings.footerEnabled)
-            var actions: [SyncAction] = []
-            for workout in changes.added.sorted(by: { $0.start < $1.start }) {
+            let followed = try await followDeletions(in: changes, composer: composer)
+            var actions = followed.actions
+            for workout in followed.remaining.sorted(by: { $0.start < $1.start }) {
                 actions.append(try await sync(workout, to: destination.id, since: syncStartDate, composer: composer))
             }
             return SyncResult(actions: actions, nextAnchor: changes.anchor)
@@ -80,7 +82,8 @@ public struct SyncEngine: Sendable {
                 calendarID: event.calendarID,
                 written: event.content,
                 createdAt: now,
-                updatedAt: now
+                updatedAt: now,
+                activityType: workout.activityType
             ))
         } catch {
             // An event with no ledger entry would be created again next pass, so undo it

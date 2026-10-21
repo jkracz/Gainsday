@@ -23,6 +23,8 @@ nonisolated final class LedgerRecord {
     var preUpdate: Data?
     var createdAt: Date = Date.distantPast
     var updatedAt: Date = Date.distantPast
+    /// The `WorkoutActivityType` raw value.
+    var activityType: Int?
 
     init(_ entry: LedgerEntry) {
         update(from: entry)
@@ -41,6 +43,7 @@ nonisolated final class LedgerRecord {
         preUpdate = entry.preUpdate.flatMap { try? JSONEncoder().encode($0) }
         createdAt = entry.createdAt
         updatedAt = entry.updatedAt
+        activityType = entry.activityType.map { Int($0.rawValue) }
     }
 
     var entry: LedgerEntry {
@@ -57,7 +60,8 @@ nonisolated final class LedgerRecord {
             written: written.flatMap { try? JSONDecoder().decode(EventContent.self, from: $0) },
             preUpdate: preUpdate.flatMap { try? JSONDecoder().decode(EventContent.self, from: $0) },
             createdAt: createdAt,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            activityType: activityType.flatMap { UInt(exactly: $0) }.map(WorkoutActivityType.init(rawValue:))
         )
     }
 }

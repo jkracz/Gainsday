@@ -22,7 +22,8 @@ struct SwiftDataLedgerTests {
             calendarID: "workouts",
             written: EventContent(title: "🏃 Running", start: start, end: start.addingTimeInterval(minutes * 60), notes: "Notes"),
             createdAt: start,
-            updatedAt: start
+            updatedAt: start,
+            activityType: .running
         )
     }
 
