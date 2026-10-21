@@ -62,7 +62,7 @@ private struct CalendarRow: View {
         } label: {
             HStack {
                 Text(verbatim: calendar.title)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.primary)
                 Spacer()
                 if model.selectedCalendarID == calendar.id {
                     Image(systemName: "checkmark")
