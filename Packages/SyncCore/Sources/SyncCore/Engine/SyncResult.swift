@@ -40,6 +40,9 @@ public enum SyncAction: Hashable, Codable, Sendable {
     /// A planned event the user made, updated with the workout and adopted, instead of
     /// adding a separate event. [v1.1]
     case adopt(workoutID: UUID, eventID: String, EventContent, decidedBy: MatchDecider)
+    /// An adopted event whose workout was deleted in Health, with the workout section
+    /// taken out and everything else left as the user had it. [v1.1]
+    case removeWorkoutSection(workoutID: UUID, eventID: String, EventContent)
 }
 
 public struct SyncResult: Hashable, Sendable {

@@ -54,7 +54,7 @@ final class SyncCoordinator {
             calendar: calendar,
             ledger: ledger,
             settings: settingsStore,
-            judge: UnavailableMatchJudge(),
+            judge: OnDeviceMatchJudge(),
             clock: clock,
             notifier: notifier,
             activityLog: activityLogStore
@@ -135,10 +135,15 @@ final class SyncCoordinator {
     }
 
     /// Undoes an activity log entry. It counts as a pass, so it never runs alongside one.
-    func undo(_ entry: ActivityLogEntry) async throws {
+    /// Undoing an update to a planned event needs the user's choice for the workout.
+    func undo(_ entry: ActivityLogEntry, choice: ActivityLogEntry.PlannedEventUndoChoice? = nil) async throws {
         runningPasses += 1
         defer { runningPasses -= 1 }
-        try await runner.undo(entryID: entry.id)
+        if let choice {
+            try await runner.undo(entryID: entry.id, choice: choice)
+        } else {
+            try await runner.undo(entryID: entry.id)
+        }
         await refreshActivityLog()
     }
 

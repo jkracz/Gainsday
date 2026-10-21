@@ -20,7 +20,7 @@ struct MatchingExplanation: View {
             SetupPoint(
                 title: "Your title and notes stay",
                 systemImage: "text.badge.checkmark",
-                detail: "The event moves to when you actually worked out, and the workout's details are added below your notes."
+                detail: "The event moves to when you actually worked out, and the workout's details are added below your notes. You can undo this in Activity."
             )
             SetupPoint(
                 title: "Only clear matches",
