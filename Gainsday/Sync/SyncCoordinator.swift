@@ -16,22 +16,30 @@ final class SyncCoordinator {
     /// Health and calendar permissions don't survive a reinstall, though settings
     /// restored from iCloud do, so setup runs once on every install.
     private(set) var hasFinishedSetupOnThisDevice = UserDefaults.standard.bool(forKey: setupKey)
-    /// Set while the app waits for a pass or backfill. Shown as "Syncing…".
-    var isSyncing = false
+    /// How many passes or backfills are running or queued in `runner`.
+    var runningPasses = 0
+    var isSyncing: Bool { runningPasses > 0 }
+    /// A pass found the phone locked. It runs again once the phone is unlocked.
+    var isWaitingForUnlock = false
     var lastPass: Pass?
     var lastError: String?
+    /// The activity log, newest first.
+    private(set) var activityLog: [ActivityLogEntry] = []
+    /// Add-only access greys out features that need to read or change events.
+    private(set) var calendarAccess = AccessMode.none
 
     let health: HealthKitWorkoutSource
     let calendar: EventKitCalendarStore
     private let settingsStore: CloudSettingsStore
-    private let anchors: AnchorStore
     let cloudImport = CloudImportMonitor()
+    private let activityLogStore: FileActivityLogStore
     let clock = SystemClock()
     private let notifier = LocalNotifier()
     let engine: SyncEngine
-    /// Keeps passes from overlapping, so they can't create duplicates.
-    let passes = PassRunner()
-    /// Long enough for the iCloud import wait plus a normal pass.
+    /// Runs passes one at a time, so overlapping triggers create no duplicates.
+    let runner: SyncRunner
+    /// How long the app waits for a pass, including the iCloud import wait,
+    /// before showing an error.
     static let passTimeout: Duration = .seconds(90)
     private static let setupKey = "hasFinishedSetupOnThisDevice"
 
@@ -43,24 +51,28 @@ final class SyncCoordinator {
         health = HealthKitWorkoutSource()
         calendar = EventKitCalendarStore()
         settingsStore = CloudSettingsStore()
-        anchors = AnchorStore()
+        activityLogStore = FileActivityLogStore()
         engine = SyncEngine(
             workouts: health,
             calendar: calendar,
             ledger: ledger,
             settings: settingsStore,
-            judge: UnavailableMatchJudge(),
+            judge: OnDeviceMatchJudge(),
             clock: clock,
-            notifier: notifier
+            notifier: notifier,
+            activityLog: activityLogStore
         )
+        runner = SyncRunner(engine: engine, anchors: AnchorStore())
         UNUserNotificationCenter.current().delegate = notifier
     }
 
     func load() async {
         settings = await settingsStore.load()
+        calendarAccess = await calendar.accessMode()
+        await refreshActivityLog()
         // The setup flag can come back from a device backup, and access can be revoked
         // in Settings. Either way, setup has to ask again before syncing can work.
-        if hasFinishedSetupOnThisDevice, await calendar.accessMode() == .none {
+        if hasFinishedSetupOnThisDevice, calendarAccess == .none {
             await engine.report(.calendarAccessRevoked)
             forgetSetup()
         }
@@ -75,33 +87,37 @@ final class SyncCoordinator {
         }
     }
 
-    /// Saves the destination and starts syncing workouts from now on. A sync start
-    /// date restored from iCloud is kept, so a reinstall doesn't skip workouts.
-    func finishSetup(destination: CalendarInfo) async {
-        settings.destinationCalendar = CalendarReference(id: destination.id, title: destination.title)
-        settings.syncStartDate = settings.syncStartDate ?? clock.now
-        await settingsStore.save(settings)
+    /// Saves the destination and setup's other `choices`, and starts syncing workouts from
+    /// now on. A sync start date restored from iCloud is kept, so a reinstall doesn't skip workouts.
+    func finishSetup(destination: CalendarInfo, choices: @escaping @Sendable (inout Settings) -> Void = { _ in }) async {
+        let reference = CalendarReference(id: destination.id, title: destination.title)
+        let now = clock.now
+        // Waits for settings restored from iCloud, so their start date is the one kept.
+        settings = await settingsStore.edit { settings in
+            choices(&settings)
+            settings.destinationCalendar = reference
+            settings.syncStartDate = settings.syncStartDate ?? now
+        }
         UserDefaults.standard.set(true, forKey: Self.setupKey)
         hasFinishedSetupOnThisDevice = true
         await notifier.requestAuthorization()
         await sync()
     }
 
-    /// Changes settings now and backs them up to iCloud.
-    func updateSettings(_ change: (inout Settings) -> Void) {
+    /// Changes settings now and backs them up to iCloud, on top of any still being restored.
+    func updateSettings(_ change: @escaping @Sendable (inout Settings) -> Void) {
         change(&settings)
-        Task { await settingsStore.save(settings) }
+        Task { await settingsStore.edit(change) }
     }
 
-    /// Runs a catch-up pass from the stored anchor. Does nothing before setup, or
-    /// while another pass is running, so overlapping triggers create no duplicates.
-    /// Shows an error if the pass takes longer than `passTimeout`.
+    /// Runs a catch-up pass from the stored anchor. Does nothing before setup. If a
+    /// pass is already running, waits for it and then runs one more, so a workout
+    /// that arrived during it isn't missed. Shows an error after `passTimeout`.
     func sync() async {
-        guard !isSyncing else { return }
-        isSyncing = true
-        defer { isSyncing = false }
+        runningPasses += 1
+        defer { runningPasses -= 1 }
         do {
-            try await passes.run(timeout: Self.passTimeout) { await self.runPass() }
+            try await withTimeout(Self.passTimeout) { await self.runPass() }
         } catch {
             lastError = error.localizedDescription
         }
@@ -114,19 +130,39 @@ final class SyncCoordinator {
         // After a reinstall, give the ledger a chance to come back from iCloud first.
         _ = await cloudImport.waitForInitialImport()
         do {
-            let result = try await engine.run(.changes(since: anchors.load()))
-            if let anchor = result.nextAnchor {
-                anchors.save(anchor)
-            }
+            let result = try await runner.syncChanges()
+            isWaitingForUnlock = false
             let createdCount = result.actions.count { if case .create = $0 { true } else { false } }
             lastPass = Pass(finishedAt: clock.now, createdCount: createdCount)
             lastError = nil
+        } catch WorkoutSourceError.locked {
+            isWaitingForUnlock = true
         } catch CalendarStoreError.calendarNotFound(let id) where id == settings.destinationCalendar?.id {
             // The destination was deleted. Setup lets the user choose another.
             forgetSetup()
         } catch {
             lastError = error.localizedDescription
         }
+        await refreshActivityLog()
+    }
+
+    /// Undoes an activity log entry. It counts as a pass, so it never runs alongside one.
+    /// Undoing an update to a planned event needs the user's choice for the workout.
+    func undo(_ entry: ActivityLogEntry, choice: ActivityLogEntry.PlannedEventUndoChoice? = nil) async throws {
+        runningPasses += 1
+        defer { runningPasses -= 1 }
+        try await withTimeout(Self.passTimeout) {
+            if let choice {
+                try await self.runner.undo(entryID: entry.id, choice: choice)
+            } else {
+                try await self.runner.undo(entryID: entry.id)
+            }
+        }
+        await refreshActivityLog()
+    }
+
+    func refreshActivityLog() async {
+        activityLog = (try? await activityLogStore.load()) ?? []
     }
 
     private func forgetSetup() {

@@ -10,6 +10,7 @@ public actor InMemoryWorkoutSource: WorkoutSource {
 
     private var history: [Change] = []
     private var isAccessDenied = false
+    private var isLocked = false
 
     public init(workouts: [Workout] = []) {
         history = workouts.map(Change.added)
@@ -44,8 +45,14 @@ public actor InMemoryWorkoutSource: WorkoutSource {
         isAccessDenied = denied
     }
 
+    /// Makes every read fail as if the phone were locked.
+    public func setLocked(_ locked: Bool) {
+        isLocked = locked
+    }
+
     public func changes(since anchor: WorkoutAnchor?) async throws -> WorkoutChanges {
         if isAccessDenied { throw WorkoutSourceError.accessDenied }
+        if isLocked { throw WorkoutSourceError.locked }
         let start = anchor.map(Self.position) ?? 0
         var added: [Workout] = []
         var deletedIDs: [UUID] = []

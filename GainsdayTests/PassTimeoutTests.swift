@@ -4,8 +4,8 @@ import Testing
 
 /// A pass awaits Health, Calendar and iCloud. When one of them never answers, the
 /// pass has to end with an error rather than show "Syncing…" for good.
-@MainActor @Suite("Pass runner", .timeLimit(.minutes(1)))
-struct PassRunnerTests {
+@MainActor @Suite("Pass timeout", .timeLimit(.minutes(1)))
+struct PassTimeoutTests {
     /// A pass that only finishes once `release()` is called, like a Health query
     /// waiting on a daemon that isn't answering.
     final class StuckPass {
@@ -24,31 +24,27 @@ struct PassRunnerTests {
 
     @Test("A pass that never finishes ends with a timeout instead of running forever")
     func timesOut() async {
-        let runner = PassRunner()
         let stuck = StuckPass()
         defer { stuck.release() }
 
-        await #expect(throws: PassRunner.Failure.timedOut) {
-            try await runner.run(timeout: .milliseconds(200)) { await stuck.run() }
+        await #expect(throws: PassTimedOut()) {
+            try await withTimeout(.milliseconds(200)) { await stuck.run() }
         }
     }
 
-    @Test("While a timed-out pass is still running, no other pass starts, so they can't both add an event")
-    func noOverlapWithStuckPass() async throws {
-        let runner = PassRunner()
+    @Test("A pass that timed out still finishes once the service answers, so its result is kept")
+    func timedOutPassFinishesLater() async throws {
         let stuck = StuckPass()
-        _ = try? await runner.run(timeout: .milliseconds(200)) { await stuck.run() }
-
-        var secondPassRan = false
-        await #expect(throws: PassRunner.Failure.stillRunning) {
-            try await runner.run(timeout: .seconds(5)) { secondPassRan = true }
-        }
-        #expect(!secondPassRan)
+        _ = try? await withTimeout(.milliseconds(200)) { await stuck.run() }
+        #expect(!stuck.finished)
 
         stuck.release()
-        while runner.isRunning { try await Task.sleep(for: .milliseconds(20)) }
+        while !stuck.finished { try await Task.sleep(for: .milliseconds(20)) }
         #expect(stuck.finished)
-        try await runner.run(timeout: .seconds(5)) { secondPassRan = true }
-        #expect(secondPassRan)
+    }
+
+    @Test("A pass that finishes in time returns its result")
+    func finishesInTime() async throws {
+        #expect(try await withTimeout(.seconds(5)) { 42 } == 42)
     }
 }

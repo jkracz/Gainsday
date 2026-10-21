@@ -14,7 +14,7 @@ public enum BackfillMode: Hashable, Sendable {
 }
 
 /// Why a workout was left alone.
-public enum SkipReason: Hashable, Sendable {
+public enum SkipReason: Hashable, Codable, Sendable {
     case typeDisabled
     case tooShort
     case beforeSyncStartDate
@@ -27,7 +27,7 @@ public enum SkipReason: Hashable, Sendable {
 
 /// One action a pass took, or planned to take in a backfill preview. Each one
 /// becomes an activity log entry.
-public enum SyncAction: Hashable, Sendable {
+public enum SyncAction: Hashable, Codable, Sendable {
     case create(workoutID: UUID, EventDraft)
     case update(workoutID: UUID, eventID: String, EventContent)
     case delete(workoutID: UUID, eventID: String)
@@ -37,6 +37,12 @@ public enum SyncAction: Hashable, Sendable {
     /// An event the app wrote earlier, found in the calendar and recorded in the ledger
     /// again instead of being duplicated, e.g. after a reinstall.
     case relink(workoutID: UUID, eventID: String)
+    /// A planned event the user made, updated with the workout and adopted, instead of
+    /// adding a separate event. [v1.1]
+    case adopt(workoutID: UUID, eventID: String, EventContent, decidedBy: MatchDecider)
+    /// An adopted event whose workout was deleted in Health, with the workout section
+    /// taken out and everything else left as the user had it. [v1.1]
+    case removeWorkoutSection(workoutID: UUID, eventID: String, EventContent)
 }
 
 public struct SyncResult: Hashable, Sendable {

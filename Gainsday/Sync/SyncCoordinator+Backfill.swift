@@ -22,6 +22,7 @@ extension SyncCoordinator {
         lastPass = Pass(finishedAt: clock.now, createdCount: result.createdCount)
         // The sync start date may have moved back.
         await load()
+        await refreshActivityLog()
         return result.createdCount
     }
 
@@ -36,20 +37,15 @@ extension SyncCoordinator {
         }
     }
 
-    /// Runs a backfill pass once no other pass is running, waiting up to
-    /// `passTimeout` for one to finish.
+    /// Runs a backfill pass once no other pass is running. A long range takes longer
+    /// than a catch-up pass, so it gets twice the time before showing an error.
     private func runBackfill(_ interval: DateInterval, mode: BackfillMode) async throws -> SyncResult {
-        let deadline = ContinuousClock.now + Self.passTimeout
-        while passes.isRunning, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(200))
-        }
-        isSyncing = true
-        defer { isSyncing = false }
-        // A long range takes longer than a catch-up pass.
-        return try await passes.run(timeout: Self.passTimeout * 2) {
+        runningPasses += 1
+        defer { runningPasses -= 1 }
+        return try await withTimeout(Self.passTimeout * 2) {
             // After a reinstall, give the ledger a chance to come back from iCloud first.
             _ = await self.cloudImport.waitForInitialImport()
-            return try await self.engine.run(.backfill(interval, mode))
+            return try await self.runner.backfill(interval, mode: mode)
         }
     }
 }

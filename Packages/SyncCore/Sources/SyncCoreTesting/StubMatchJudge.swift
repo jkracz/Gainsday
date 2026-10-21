@@ -11,6 +11,7 @@ public actor StubMatchJudge: MatchJudge {
 
     private var currentAvailability: MatchJudgeAvailability
     private var answers: [MatchJudgement]
+    private var failure: MatchJudgeError?
     /// Every question asked, in order.
     public private(set) var questions: [Question] = []
 
@@ -23,12 +24,23 @@ public actor StubMatchJudge: MatchJudge {
         currentAvailability = availability
     }
 
+    /// Replaces the answers still to give.
+    public func setAnswers(_ answers: [MatchJudgement]) {
+        self.answers = answers
+    }
+
+    /// Makes every question from now on throw instead of answering.
+    public func failJudging(with error: MatchJudgeError) {
+        failure = error
+    }
+
     public func availability() async -> MatchJudgeAvailability {
         currentAvailability
     }
 
     public func judge(_ workout: Workout, candidates: [CalendarEvent]) async throws -> MatchJudgement {
         questions.append(Question(workout: workout, candidates: candidates))
+        if let failure { throw failure }
         guard !answers.isEmpty else { return MatchJudgement(chosenIndex: nil, confidence: 0) }
         return answers.removeFirst()
     }

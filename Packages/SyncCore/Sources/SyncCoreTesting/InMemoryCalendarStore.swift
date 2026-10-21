@@ -9,6 +9,7 @@ public actor InMemoryCalendarStore: CalendarStore {
     private var mode: AccessMode
     private let clock: any Clock
     public private(set) var refreshCount = 0
+    private var defaultID: String?
 
     public init(calendars: [CalendarInfo] = [], events: [CalendarEvent] = [], accessMode: AccessMode = .full, clock: any Clock) {
         self.calendars = calendars
@@ -47,6 +48,11 @@ public actor InMemoryCalendarStore: CalendarStore {
     public func removeCalendar(id: String) {
         calendars.removeAll { $0.id == id }
         storedEvents = storedEvents.filter { $0.value.calendarID != id }
+    }
+
+    /// Makes a calendar the one new events go to by default, as the user can in Settings.
+    public func setDefaultCalendar(id: String?) {
+        defaultID = id
     }
 
     /// Changes an event's external identifier, as a server sync can.
@@ -114,6 +120,10 @@ public actor InMemoryCalendarStore: CalendarStore {
 
     public func refreshSources() async {
         refreshCount += 1
+    }
+
+    public func defaultCalendarID() async -> String? {
+        mode == .full ? defaultID : nil
     }
 
     private func requireFullAccess() throws {

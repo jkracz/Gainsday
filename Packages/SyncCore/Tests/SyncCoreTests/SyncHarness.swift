@@ -22,6 +22,7 @@ struct SyncHarness {
     let settings: InMemorySettingsStore
     let judge: StubMatchJudge
     let notifier: RecordingProblemNotifier
+    let activityLog: InMemoryActivityLogStore
     let engine: SyncEngine
 
     init(
@@ -36,6 +37,7 @@ struct SyncHarness {
         self.settings = InMemorySettingsStore(settings)
         judge = StubMatchJudge()
         notifier = RecordingProblemNotifier()
+        activityLog = InMemoryActivityLogStore()
         engine = SyncEngine(
             workouts: self.workouts,
             calendar: calendar,
@@ -43,7 +45,8 @@ struct SyncHarness {
             settings: self.settings,
             judge: judge,
             clock: clock,
-            notifier: notifier
+            notifier: notifier,
+            activityLog: activityLog
         )
     }
 

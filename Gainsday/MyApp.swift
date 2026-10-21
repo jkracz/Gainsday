@@ -13,7 +13,9 @@ import SwiftUI
             // Syncing without the ledger would create duplicates, so don't run at all.
             fatalError("Couldn't open the ledger: \(error)")
         }
-        _coordinator = State(initialValue: SyncCoordinator(ledger: SwiftDataLedger(modelContainer: container)))
+        let coordinator = SyncCoordinator(ledger: SwiftDataLedger(modelContainer: container))
+        coordinator.startBackgroundSync()
+        _coordinator = State(initialValue: coordinator)
     }
 
     var body: some Scene {
@@ -27,7 +29,12 @@ import SwiftUI
             // Catch up on every app open.
             if phase == .active {
                 Task { await coordinator.sync() }
+            } else if phase == .background {
+                coordinator.scheduleAppRefresh()
             }
+        }
+        .backgroundTask(.appRefresh(SyncCoordinator.appRefreshTaskID)) {
+            await coordinator.refreshInBackground()
         }
     }
 }

@@ -12,6 +12,12 @@ actor EventKitCalendarStore: CalendarStore {
         try await store.requestFullAccessToEvents()
     }
 
+    /// Shows the add-only access prompt if the user hasn't answered it yet. With this
+    /// access the app can add events but can't see any, not even its own.
+    func requestAddOnlyAccess() async throws -> Bool {
+        try await store.requestWriteOnlyAccessToEvents()
+    }
+
     /// Fires when calendars or events change, in this app or elsewhere.
     nonisolated func changes() -> AsyncStream<Void> {
         NotificationCenter.default.signals(named: .EKEventStoreChanged)
@@ -79,6 +85,11 @@ actor EventKitCalendarStore: CalendarStore {
         store.refreshSourcesIfNecessary()
     }
 
+    func defaultCalendarID() async -> String? {
+        guard await accessMode() == .full else { return nil }
+        return store.defaultCalendarForNewEvents?.calendarIdentifier
+    }
+
     private func requireFullAccess() async throws {
         switch await accessMode() {
         case .full: return
@@ -101,7 +112,7 @@ actor EventKitCalendarStore: CalendarStore {
         event.notes = content.notes
     }
 
-    private static func calendarInfo(_ calendar: EKCalendar) -> CalendarInfo {
+    static func calendarInfo(_ calendar: EKCalendar) -> CalendarInfo {
         CalendarInfo(
             id: calendar.calendarIdentifier,
             title: calendar.title,
@@ -119,7 +130,8 @@ actor EventKitCalendarStore: CalendarStore {
             isAllDay: event.isAllDay,
             attendeeCount: event.attendees?.count ?? 0,
             isDeclinedByUser: event.attendees?.contains { $0.isCurrentUser && $0.participantStatus == .declined } ?? false,
-            lastModified: event.lastModifiedDate
+            lastModified: event.lastModifiedDate,
+            isRecurring: event.hasRecurrenceRules
         )
     }
 

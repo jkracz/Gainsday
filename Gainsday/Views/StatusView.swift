@@ -16,12 +16,19 @@ struct StatusView: View {
                         }
                     }
                 } footer: {
-                    Text("Workouts you finish appear in this calendar when you open Gainsday.")
+                    SyncTimingFooter()
                 }
 
                 Section {
                     TemplateEditorLink()
                     NavigationLink("Add Past Workouts") { BackfillView() }
+                    NavigationLink("Activity") {
+                        ActivityLogView()
+                    }
+                }
+
+                if !coordinator.hasFullCalendarAccess {
+                    CalendarAccessSection()
                 }
 
                 Section("Last Sync") {

@@ -8,7 +8,7 @@ extension SyncEngine {
     ///
     /// A preview runs the exact same pass against copies of the calendar and ledger that
     /// keep their writes to themselves. It writes nothing, and a commit straight after it
-    /// takes the actions it listed.
+    /// takes the actions it listed. Only a commit is recorded in the activity log.
     func backfill(_ interval: DateInterval, mode: BackfillMode) async throws -> SyncResult {
         var settings = await settings.load()
         guard let destination = settings.destinationCalendar, let syncStartDate = settings.syncStartDate else {
@@ -31,14 +31,23 @@ extension SyncEngine {
             }
         }
         let composer = EventComposer(settings: settings, clock: clock)
-        return SyncResult(actions: try await engine.syncAdded(found, to: destination.id, settings: settings, composer: composer))
+        let result = SyncResult(actions: try await engine.syncAdded(found, to: destination.id, settings: settings, composer: composer))
+        switch mode {
+        case .preview:
+            return result
+        case .commit:
+            return await notifyHeldWorkouts(in: ActivityRecorder(engine: self, added: found).record(result))
+        }
     }
 
-    /// Syncs workouts Health added, oldest first.
+    /// Syncs workouts Health added, oldest first. Workouts from apps the allowlist
+    /// leaves out are skipped, and copies of one workout recorded by several apps
+    /// share one event.
     func syncAdded(_ added: [Workout], to calendarID: String, settings: Settings, composer: EventComposer) async throws -> [SyncAction] {
-        var actions: [SyncAction] = []
-        for workout in added.sorted(by: { $0.start < $1.start }) {
-            actions.append(try await sync(workout, to: calendarID, settings: settings, composer: composer))
+        let (allowed, notAllowed) = settings.splitBySource(added)
+        var actions = notAllowed.sorted { $0.start < $1.start }.map { SyncAction.skip(workoutID: $0.id, .sourceNotAllowed) }
+        for cluster in WorkoutCluster.clusters(of: allowed) {
+            actions.append(try await sync(cluster, to: calendarID, settings: settings, composer: composer))
         }
         return actions
     }
@@ -64,7 +73,9 @@ private actor DryRunCalendarStore: CalendarStore {
     }
 
     func events(in interval: DateInterval, calendarIDs: Set<String>) async throws -> [CalendarEvent] {
-        let real = try await base.events(in: interval, calendarIDs: calendarIDs)
+        // An event this copy updated is in `created`, so its real version is left out.
+        let pretendIDs = Set(created.map(\.id))
+        let real = try await base.events(in: interval, calendarIDs: calendarIDs).filter { !pretendIDs.contains($0.id) }
         let pretend = created.filter {
             calendarIDs.contains($0.calendarID) && $0.content.start < interval.end && $0.content.end > interval.start
         }
@@ -96,6 +107,10 @@ private actor DryRunCalendarStore: CalendarStore {
     }
 
     func refreshSources() async {}
+
+    func defaultCalendarID() async -> String? {
+        await base.defaultCalendarID()
+    }
 }
 
 /// A ledger for previews: the real entries overlaid with this copy's saves and deletes.
@@ -115,6 +130,10 @@ private actor DryRunLedger: Ledger {
     func entries(in interval: DateInterval) async throws -> [LedgerEntry] {
         overlaid(try await base.entries(in: interval))
             .filter { $0.workoutStart < interval.end && $0.workoutEnd > interval.start }
+    }
+
+    func entriesNeedingLinking() async throws -> [LedgerEntry] {
+        overlaid(try await base.entriesNeedingLinking()).filter(\.needsLinking)
     }
 
     func save(_ entry: LedgerEntry) async throws {

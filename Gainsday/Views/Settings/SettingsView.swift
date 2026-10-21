@@ -7,8 +7,11 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            CalendarAccessSection()
+
             Section {
                 WorkoutTypesLink()
+                SourcesLink()
                 Picker("Minimum Duration", selection: minimumDuration) {
                     ForEach(durationChoices, id: \.self) { seconds in
                         Text(Self.label(forMinimum: seconds)).tag(seconds)
@@ -25,6 +28,8 @@ struct SettingsView: View {
             } header: {
                 Text("Events")
             }
+
+            UnclearMatchSettingsSection()
         }
         .navigationTitle("Settings")
     }

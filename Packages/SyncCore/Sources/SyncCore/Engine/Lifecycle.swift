@@ -6,12 +6,15 @@ extension SyncEngine {
     /// HealthKit workouts are immutable, so an edit, merge or re-import arrives as a
     /// delete plus an add. When an added workout of the same type overlaps a deleted
     /// one in the same pass, it replaces it: the existing event is updated in place.
-    /// A replacement the user's filters leave out keeps the event as it is.
+    /// A replacement the user's filters leave out keeps the event as it is. When a
+    /// cluster loses the member whose values the event shows, another copy still in
+    /// Health takes over and the event is rewritten with its values.
     ///
     /// Before touching an owned event, the engine compares it with what it last wrote.
     /// If the user edited it, the event is released and left alone from then on. If
     /// the user deleted it, the workout is tombstoned so it's never recreated.
-    /// Released and tombstoned entries are left alone; adopted events are [v1.1].
+    /// Released and tombstoned entries are left alone. Adopted events keep their time
+    /// and lose only the workout section (see `AdoptedLifecycle.swift`).
     ///
     /// Returns the actions taken and the added workouts that still need syncing.
     func followDeletions(
@@ -24,12 +27,18 @@ extension SyncEngine {
         for deletedID in changes.deletedIDs {
             // Collapse iCloud duplicates and fix a changed identifier first, so an event
             // that's still there isn't mistaken for one the user deleted.
-            guard let resolved = try await resolvedEntry(forWorkout: deletedID), resolved.state == .owned else { continue }
+            guard let resolved = try await resolvedEntry(forWorkout: deletedID), [.owned, .adopted].contains(resolved.state) else { continue }
             let entry = try await correctExternalIdentifier(of: resolved)
             let survivors = entry.memberIDs.subtracting(changes.deletedIDs)
             if !survivors.isEmpty {
                 // Another copy of the workout is still in Health, so the event stays.
                 var entry = entry
+                if entry.workoutID == deletedID, let successor = try await successor(in: entry, among: survivors, settings: settings) {
+                    entry.memberIDs.remove(deletedID)
+                    entry.takeIdentity(from: successor)
+                    actions.append(try await rewrite(entry, for: successor, composer: composer))
+                    continue
+                }
                 entry.remove(deletedID, keeping: survivors)
                 entry.updatedAt = clock.now
                 try await ledger.save(entry)
@@ -64,47 +73,79 @@ extension SyncEngine {
         composer: EventComposer
     ) async throws -> SyncAction? {
         guard let eventID = entry.eventExternalIdentifier else { return nil }
-        var entry = entry
         if let replacement {
+            var entry = entry
             entry.replace(deletedID, with: replacement)
+            return try await rewrite(entry, for: replacement, composer: composer)
         }
-        let workoutID = replacement?.id ?? deletedID
-        let save = { (state: LedgerEntry.State) in
-            entry.state = state
-            entry.updatedAt = clock.now
-            try await ledger.save(entry)
+        if let blocked = try await blockedChange(to: entry, eventID: eventID, workoutID: deletedID) {
+            return blocked
         }
+        if entry.state == .adopted {
+            return try await removeWorkoutSection(of: entry, eventID: eventID, workoutID: deletedID)
+        }
+        try await calendar.delete(eventID: eventID)
+        try await ledger.delete(entryID: entry.id)
+        return .delete(workoutID: deletedID, eventID: eventID)
+    }
 
+    /// Writes `workout`'s values to an owned entry's event, which the entry already
+    /// names as the workout's, and saves the entry. An entry with no event to
+    /// change, e.g. a tombstone, is only saved.
+    func rewrite(_ entry: LedgerEntry, for workout: Workout, composer: EventComposer) async throws -> SyncAction {
+        if entry.state == .adopted {
+            return try await rewriteAdopted(entry, for: workout, composer: composer)
+        }
+        var entry = entry
+        entry.updatedAt = clock.now
+        guard entry.state == .owned, let eventID = entry.eventExternalIdentifier else {
+            try await ledger.save(entry)
+            return .skip(workoutID: workout.id, entry.state == .tombstoned ? .tombstoned : .alreadySynced)
+        }
+        if let blocked = try await blockedChange(to: entry, eventID: eventID, workoutID: workout.id) {
+            return blocked
+        }
+        let updated = try await calendar.update(eventID: eventID, to: composer.content(for: workout))
+        entry.eventExternalIdentifier = updated.id
+        entry.written = updated.content
+        try await ledger.save(entry)
+        return .update(workoutID: workout.id, eventID: updated.id, updated.content)
+    }
+
+    /// Checks an owned or adopted event before the app changes it. When it can't be changed,
+    /// saves the entry and returns what happened instead: add-only access keeps the
+    /// event as it is, a deleted event tombstones the workout so it's never
+    /// recreated, and an edited one is released. Nil when the event is still as the
+    /// app wrote it.
+    func blockedChange(to entry: LedgerEntry, eventID: String, workoutID: UUID) async throws -> SyncAction? {
+        var entry = entry
+        entry.updatedAt = clock.now
         let event: CalendarEvent?
         do {
             event = try await calendar.event(withID: eventID)
         } catch CalendarStoreError.requiresFullAccess {
-            // Add-only access can't read, update or delete the event. Keep it, and
-            // point the entry at any replacement so it isn't created a second time.
-            if replacement != nil {
-                try await save(.owned)
-            }
+            // Keep the entry, which may now point at a replacement, so the event isn't created a second time.
+            try await ledger.save(entry)
             return .skip(workoutID: workoutID, .requiresFullAccess)
         }
         guard let event else {
-            // The user deleted the event: never create one for this workout again.
-            try await save(.tombstoned)
+            entry.state = .tombstoned
+            try await ledger.save(entry)
             return .skip(workoutID: workoutID, .tombstoned)
         }
-        guard event.content.matches(entry.written) else {
-            try await save(.released)
+        guard entry.state == .adopted ? entry.adoptedEventIsAsWritten(event.content) : event.content.matches(entry.written) else {
+            entry.state = .released
+            try await ledger.save(entry)
             return .release(workoutID: workoutID, eventID: eventID)
         }
-        guard let replacement else {
-            try await calendar.delete(eventID: eventID)
-            try await ledger.delete(entryID: entry.id)
-            return .delete(workoutID: workoutID, eventID: eventID)
-        }
-        let updated = try await calendar.update(eventID: eventID, to: composer.content(for: replacement))
-        entry.eventExternalIdentifier = updated.id
-        entry.written = updated.content
-        try await save(.owned)
-        return .update(workoutID: workoutID, eventID: updated.id, updated.content)
+        return nil
+    }
+
+    /// The surviving cluster member whose values the event should show now, if any
+    /// is still in Health and allowed.
+    private func successor(in entry: LedgerEntry, among survivors: Set<UUID>, settings: Settings) async throws -> Workout? {
+        let remaining = try await healthWorkouts(in: entry).filter { survivors.contains($0.id) }
+        return settings.splitBySource(remaining).allowed.min(by: Workout.isPreferred)
     }
 
     /// The first added workout of the same type that overlaps the entry's workout
@@ -135,10 +176,7 @@ private extension LedgerEntry {
         memberIDs.remove(deletedID)
         memberIDs.insert(replacement.id)
         if workoutID == deletedID {
-            workoutID = replacement.id
-            workoutStart = replacement.start
-            workoutEnd = replacement.end
-            activityType = replacement.activityType
+            takeIdentity(from: replacement)
         }
     }
 }

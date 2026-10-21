@@ -34,6 +34,28 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
         try await store.requestAuthorization(toShare: [], read: Self.readTypes)
     }
 
+    /// Lets Health launch or wake the app as soon as a workout is saved. The setting
+    /// persists, so calling this again on later launches is harmless.
+    func enableBackgroundDelivery() async throws {
+        try requireHealthData()
+        try await store.enableBackgroundDelivery(for: .workoutType(), frequency: .immediate)
+    }
+
+    /// Calls `onChange` when workouts are added or deleted in Health, including when
+    /// Health launches the app in the background. Start this early in launch, or a
+    /// background launch isn't delivered. `onChange` must call `finished` once it has
+    /// synced, or Health wakes the app less often.
+    func observeWorkouts(onChange: @escaping @Sendable (_ finished: @escaping @Sendable () -> Void) -> Void) {
+        guard isHealthDataAvailable else { return }
+        let query = HKObserverQuery(sampleType: .workoutType(), predicate: nil) { _, completionHandler, error in
+            guard error == nil else { return completionHandler() }
+            // HealthKit lets the handler be called from any thread, but doesn't mark it Sendable.
+            nonisolated(unsafe) let completionHandler = completionHandler
+            onChange { completionHandler() }
+        }
+        store.execute(query)
+    }
+
     func changes(since anchor: WorkoutAnchor?) async throws -> WorkoutChanges {
         try requireHealthData()
         let descriptor = HKAnchoredObjectQueryDescriptor(
@@ -71,13 +93,16 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
         guard isHealthDataAvailable else { throw Unavailable() }
     }
 
-    /// Reports HealthKit's authorization errors as `WorkoutSourceError.accessDenied`.
-    /// HealthKit usually hides denied read access by returning no results instead.
-    private static func mappingAccessErrors<T>(_ read: () async throws -> T) async throws -> T {
+    /// Reports HealthKit's authorization errors as `WorkoutSourceError.accessDenied`,
+    /// and its locked-phone error as `.locked`. HealthKit usually hides denied read
+    /// access by returning no results instead.
+    static func mappingAccessErrors<T>(_ read: () async throws -> T) async throws -> T {
         do {
             return try await read()
         } catch let error as HKError where [.errorAuthorizationDenied, .errorAuthorizationNotDetermined].contains(error.code) {
             throw WorkoutSourceError.accessDenied
+        } catch let error as HKError where error.code == .errorDatabaseInaccessible {
+            throw WorkoutSourceError.locked
         }
     }
 
