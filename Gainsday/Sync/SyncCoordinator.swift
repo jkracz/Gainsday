@@ -23,6 +23,7 @@ final class SyncCoordinator {
     let calendar: EventKitCalendarStore
     private let settingsStore: CloudSettingsStore
     private let anchors: AnchorStore
+    private let cloudImport = CloudImportMonitor()
     private let clock = SystemClock()
     private let engine: SyncEngine
     private static let setupKey = "hasFinishedSetupOnThisDevice"
@@ -91,6 +92,8 @@ final class SyncCoordinator {
 
         await load()
         guard isSetUp else { return }
+        // After a reinstall, give the ledger a chance to come back from iCloud first.
+        _ = await cloudImport.waitForInitialImport()
         do {
             let result = try await engine.run(.changes(since: anchors.load()))
             if let anchor = result.nextAnchor {

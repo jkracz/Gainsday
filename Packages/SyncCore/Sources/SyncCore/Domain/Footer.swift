@@ -13,4 +13,9 @@ public enum Footer {
     public static func appending(to notes: String, workoutID: UUID) -> String {
         notes.isEmpty ? line(for: workoutID) : notes + "\n\n" + line(for: workoutID)
     }
+
+    /// Whether the notes carry the workout's footer.
+    public static func isPresent(in notes: String?, workoutID: UUID) -> Bool {
+        notes?.contains(line(for: workoutID)) ?? false
+    }
 }

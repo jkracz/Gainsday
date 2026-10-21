@@ -28,9 +28,10 @@ public struct SyncEngine: Sendable {
 
     /// Runs one sync pass.
     ///
-    /// The sync rules are added feature by feature. For now a changes pass creates an
-    /// owned event for each new workout since the sync start date that the ledger
-    /// doesn't know yet, and ignores deletions. Backfill reads its inputs and takes no actions.
+    /// The sync rules are added feature by feature. For now a changes pass first follows
+    /// Health deletes and replacements (see `followDeletions`), then creates an owned
+    /// event for each new workout since the sync start date that the ledger doesn't
+    /// know yet. Backfill reads its inputs and takes no actions.
     public func run(_ trigger: SyncTrigger) async throws -> SyncResult {
         switch trigger {
         case .changes(let anchor):
@@ -41,8 +42,9 @@ public struct SyncEngine: Sendable {
             }
             let changes = try await workouts.changes(since: anchor)
             let composer = EventComposer(settings: settings, clock: clock)
-            var actions: [SyncAction] = []
-            for workout in changes.added.sorted(by: { $0.start < $1.start }) {
+            let followed = try await followDeletions(in: changes, composer: composer)
+            var actions = followed.actions
+            for workout in followed.remaining.sorted(by: { $0.start < $1.start }) {
                 actions.append(try await sync(workout, to: destination.id, since: syncStartDate, composer: composer))
             }
             return SyncResult(actions: actions, nextAnchor: changes.anchor)
@@ -56,11 +58,12 @@ public struct SyncEngine: Sendable {
         guard workout.start >= syncStartDate else {
             return .skip(workoutID: workout.id, .beforeSyncStartDate)
         }
-        let entries = try await ledger.entries(forWorkout: workout.id)
-        if !entries.isEmpty {
-            // Duplicate entries can arrive from iCloud; any live one means the workout is synced.
-            let isTombstoned = entries.allSatisfy { $0.state == .tombstoned }
-            return .skip(workoutID: workout.id, isTombstoned ? .tombstoned : .alreadySynced)
+        if let entry = try await resolvedEntry(forWorkout: workout.id) {
+            try await correctExternalIdentifier(of: entry)
+            return .skip(workoutID: workout.id, entry.state == .tombstoned ? .tombstoned : .alreadySynced)
+        }
+        if let relinked = try await relinkEarlierEvent(for: workout, in: calendarID, composer: composer) {
+            return relinked
         }
 
         let draft = EventDraft(calendarID: calendarID, content: composer.content(for: workout), availability: .free)
@@ -76,7 +79,8 @@ public struct SyncEngine: Sendable {
                 calendarID: event.calendarID,
                 written: event.content,
                 createdAt: now,
-                updatedAt: now
+                updatedAt: now,
+                activityType: workout.activityType
             ))
         } catch {
             // An event with no ledger entry would be created again next pass, so undo it
