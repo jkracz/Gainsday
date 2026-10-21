@@ -38,4 +38,29 @@ extension SyncEngine {
             log[index].eventID = separate.id
         }
     }
+
+    /// Undoes settling a workout held for review: removes the separate event it was
+    /// added as, or puts the planned event it was matched to back as it was, from the
+    /// copy the ledger kept. The workout has no ledger entry again, as when it was held,
+    /// and its held entry waits for review again.
+    func returnToReview(_ logEntry: ActivityLogEntry, heldEntryID: UUID, in log: inout [ActivityLogEntry]) async throws {
+        guard let entry = try await resolvedEntry(forWorkout: logEntry.workoutID),
+              let eventID = entry.eventExternalIdentifier else { throw UndoError.notUndoable }
+        switch entry.state {
+        case .owned:
+            if try await calendar.event(withID: eventID) != nil {
+                try await calendar.delete(eventID: eventID)
+            }
+        case .adopted:
+            guard let plan = entry.preUpdate else { throw UndoError.notUndoable }
+            _ = try await calendar.update(eventID: eventID, to: plan)
+        case .released, .tombstoned:
+            throw UndoError.notUndoable
+        }
+        try await ledger.delete(entryID: entry.id)
+
+        if let index = log.firstIndex(where: { $0.id == heldEntryID }) {
+            log[index].reviewedAt = nil
+        }
+    }
 }

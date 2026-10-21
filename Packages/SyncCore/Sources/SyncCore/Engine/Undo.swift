@@ -44,6 +44,8 @@ extension SyncEngine {
             try await restoreEvent(to: content, of: entry)
         case .separateFromPlannedEvent(let draft, let createEntryID):
             try await separateFromPlannedEvent(draft, of: entry, reenabling: createEntryID, in: &log)
+        case .returnToReview(let heldEntryID):
+            try await returnToReview(entry, heldEntryID: heldEntryID, in: &log)
         case .restorePlannedEvent(let content):
             guard let choice else { throw UndoError.choiceRequired }
             followUp = try await restorePlannedEvent(content, of: entry, choice: choice)
