@@ -94,6 +94,31 @@ struct SyncRunnerTests {
         #expect(states == [.tombstoned])
     }
 
+    @Test("Listing the events a workout can be matched to waits for a running pass, since it can fix the ledger")
+    func matchCandidatesWaitForRunningPass() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        _ = try await harness.engine.run(.changes(since: nil))
+        let entry = try #require(await harness.activityLog.entries.first)
+        let health = GatedWorkoutSource(harness.workouts)
+        let runner = harness.runner(reading: health)
+
+        async let background = runner.syncChanges()
+        await health.waitForReaders(1)
+        let listed = Flag()
+        let candidates = Task {
+            _ = try await runner.matchCandidates(forEntryID: entry.id)
+            await listed.set()
+        }
+        try await Task.sleep(for: .milliseconds(50))
+        let listedDuringPass = await listed.isSet
+        await health.open()
+        _ = try await (background, candidates.value)
+
+        #expect(listedDuringPass == false)
+        #expect(await listed.isSet)
+    }
+
     @Test("A pass while the phone is locked keeps the anchor and notifies nothing, so the pass after unlock syncs the workout")
     func lockedPassIsFinishedAfterUnlock() async throws {
         let workout = SyncHarness.run()
@@ -170,5 +195,13 @@ actor GatedWorkoutSource: WorkoutSource {
 
     func recentWorkouts(limit: Int) async throws -> [Workout] {
         try await source.recentWorkouts(limit: limit)
+    }
+}
+
+private actor Flag {
+    private(set) var isSet = false
+
+    func set() {
+        isSet = true
     }
 }
