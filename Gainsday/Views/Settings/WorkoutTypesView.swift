@@ -18,13 +18,13 @@ struct WorkoutTypesView: View {
         .navigationTitle("Workout Types")
     }
 
-    /// The known types, plus any enabled type this version doesn't name, sorted by name.
+    /// The known types sorted by name, then Other, then any enabled type this version doesn't name.
     private var types: [WorkoutActivityType] {
-        let enabled = coordinator.settings.enabledTypes
-        let extra = enabled.subtracting(WorkoutActivityType.known)
-        return (WorkoutActivityType.known + extra).sorted {
+        let named = WorkoutActivityType.known.filter { $0 != .other }.sorted {
             $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
         }
+        let unnamed = coordinator.settings.enabledTypes.subtracting(WorkoutActivityType.known)
+        return named + [.other] + unnamed.sorted { $0.rawValue < $1.rawValue }
     }
 
     private func isEnabled(_ type: WorkoutActivityType) -> Binding<Bool> {
