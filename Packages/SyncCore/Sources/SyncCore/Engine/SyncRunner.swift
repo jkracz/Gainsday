@@ -55,6 +55,13 @@ public actor SyncRunner {
         try await enqueue { try await self.engine.undo(entryID: entryID, choice: choice) }.value
     }
 
+    /// The events an activity log entry's workout can be matched to, once any pass already
+    /// running has finished. Listing them can collapse duplicate ledger entries and fix
+    /// an event's identifier, so it never runs alongside a pass. [v1.1]
+    public func matchCandidates(forEntryID entryID: UUID) async throws -> [CalendarEvent] {
+        try await enqueue { try await self.engine.matchCandidates(forEntryID: entryID) }.value
+    }
+
     /// Matches an activity log entry's workout to a planned event once any pass already
     /// running has finished. [v1.1]
     @discardableResult

@@ -36,6 +36,7 @@
     "Add Keyword" : {},
     "Add Only" : {},
     "Add Past Workouts" : {},
+    "Add Workouts" : {},
     "Add as Separate Event" : {},
     "Add the Past 7 Days" : {},
     "Add the event back?" : {},
@@ -245,6 +246,28 @@
         }
       }
     },
+    "This will update %lld planned events." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This will update %lld planned event."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This will update %lld planned events."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Time Window" : {},
     "Title" : {},
     "To" : {},
@@ -263,6 +286,28 @@
     "Update Planned Event" : {},
     "Update Planned Events" : {},
     "Update events when Health replaces a workout" : {},
+    "Updated %lld planned events." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Updated %lld planned event."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Updated %lld planned events."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Updated because the workout changed in Health" : {},
     "Use Destination and Default Calendars" : {},
     "Use On-Device Model" : {},
@@ -291,6 +336,7 @@
     "Workouts you started since %@ are added, as before." : {},
     "Yoga" : {},
     "You can change this later in Settings." : {},
+    "You changed this event in your calendar, so it's yours now and Gainsday won't delete it." : {},
     "Your Calendars" : {},
     "Your Keywords" : {},
     "Your title and notes stay" : {},

@@ -121,6 +121,11 @@ extension Settings {
         container.decode(&matchModelEnabled, .matchModelEnabled)
         container.decode(&holdUnclearMatchesForReview, .holdUnclearMatchesForReview)
         container.decode(&renameMatchedEvents, .renameMatchedEvents)
+        // The first release had no type filter: its empty default meant every type.
+        // It saved none of the later keys, so an empty list from it means the defaults.
+        if enabledTypes.isEmpty, !container.contains(.matchingEnabled) {
+            enabledTypes = Settings.defaultEnabledTypes
+        }
     }
 }
 

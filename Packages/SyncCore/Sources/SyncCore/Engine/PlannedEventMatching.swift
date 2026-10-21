@@ -19,13 +19,18 @@ extension SyncEngine {
     /// event instead: matching is off or in "create separate event" mode, the app can't
     /// read calendars, nothing matches, the match is unclear, or the event has guests.
     /// An unclear match can be held for the user's review instead.
-    func matchPlannedEvent(for cluster: WorkoutCluster, destination calendarID: String, settings: Settings, composer: EventComposer) async throws -> SyncAction? {
+    func matchPlannedEvent(
+        for cluster: WorkoutCluster,
+        destination calendarID: String,
+        settings: Settings,
+        composer: EventComposer,
+        search: PlannedEventSearch
+    ) async throws -> SyncAction? {
         let workout = cluster.preferred
         guard settings.matchingEnabled, settings.matchMode == .updatePlannedEvent,
               await calendar.accessMode() == .full else { return nil }
-        // A plan added on the web moments ago may not have reached the phone yet.
-        await calendar.refreshSources()
-        let candidates = try await plannedEventCandidates(for: workout, destination: calendarID, settings: settings)
+        let calendarIDs = try await search.calendarIDs(using: self, destination: calendarID, settings: settings)
+        let candidates = try await plannedEventCandidates(for: workout, in: calendarIDs, settings: settings)
 
         let decision: MatchDecision
         switch MatchRules(for: workout.activityType, userKeywords: settings.matchKeywords).outcome(for: candidates) {
@@ -70,8 +75,7 @@ extension SyncEngine {
     /// same day, overlapping it or starting within the match window of its start. All-day,
     /// declined and repeating events are left out, and so are events the app wrote or
     /// already links to a workout.
-    func plannedEventCandidates(for workout: Workout, destination calendarID: String, settings: Settings) async throws -> [CalendarEvent] {
-        let calendarIDs = try await searchCalendarIDs(destination: calendarID, settings: settings)
+    func plannedEventCandidates(for workout: Workout, in calendarIDs: Set<String>, settings: Settings) async throws -> [CalendarEvent] {
         guard !calendarIDs.isEmpty, let day = clock.calendar.dateInterval(of: .day, for: workout.start) else { return [] }
         let claimed = Set(try await ledger.entries(in: day)
             .filter { $0.state != .tombstoned }
@@ -92,7 +96,7 @@ extension SyncEngine {
 
     /// The calendars the user lets the app search, or, when they haven't picked any, the
     /// destination plus the default calendar. Only calendars the app can write to are searched.
-    private func searchCalendarIDs(destination calendarID: String, settings: Settings) async throws -> Set<String> {
+    func searchCalendarIDs(destination calendarID: String, settings: Settings) async throws -> Set<String> {
         let picked = settings.searchCalendars.flatMap { $0.isEmpty ? nil : $0 }
         var searched = Set(picked?.map(\.id) ?? [calendarID])
         if picked == nil, let defaultID = await calendar.defaultCalendarID() {
@@ -131,6 +135,21 @@ extension SyncEngine {
             throw error
         }
         return .adopt(workoutID: workout.id, eventID: updated.id, updated.content, decidedBy: decider)
+    }
+}
+
+/// The calendars one pass searches for planned events. They're refreshed and worked
+/// out the first time a workout needs them, then reused for the rest of the pass. [v1.1]
+final class PlannedEventSearch {
+    private var resolved: Set<String>?
+
+    func calendarIDs(using engine: SyncEngine, destination calendarID: String, settings: Settings) async throws -> Set<String> {
+        if let resolved { return resolved }
+        // A plan added on the web moments ago may not have reached the phone yet.
+        await engine.calendar.refreshSources()
+        let calendarIDs = try await engine.searchCalendarIDs(destination: calendarID, settings: settings)
+        resolved = calendarIDs
+        return calendarIDs
     }
 }
 

@@ -33,4 +33,20 @@ struct CloudImportMonitorTests {
         let nextLaunch = CloudImportMonitor(defaults: defaults, center: NotificationCenter(), hasICloudAccount: { true })
         #expect(await nextLaunch.waitForInitialImport(timeout: .milliseconds(1)))
     }
+
+    @Test("Only the first pass after installing waits: once a wait has timed out, later passes and launches go ahead at once")
+    func onlyFirstPassWaits() async {
+        let monitor = CloudImportMonitor(defaults: defaults, center: NotificationCenter(), hasICloudAccount: { true })
+        #expect(await monitor.waitForInitialImport(timeout: .milliseconds(100)) == false)
+
+        let clock = ContinuousClock()
+        let started = clock.now
+        let laterPass = await monitor.waitForInitialImport(timeout: .seconds(60))
+        let nextLaunch = CloudImportMonitor(defaults: defaults, center: NotificationCenter(), hasICloudAccount: { true })
+        let afterRelaunch = await nextLaunch.waitForInitialImport(timeout: .seconds(60))
+
+        #expect(laterPass == false)
+        #expect(afterRelaunch == false)
+        #expect(clock.now - started < .seconds(5))
+    }
 }

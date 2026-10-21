@@ -5,8 +5,9 @@ import SyncCore
 /// late or a workout held for review, and "Add as separate event" for a held one. [v1.1]
 extension SyncCoordinator {
     /// The events the entry's workout can be matched to. Never events with guests.
+    /// Listing them can fix the ledger, so it waits for any running pass.
     func matchCandidates(for entry: ActivityLogEntry) async throws -> [CalendarEvent] {
-        try await engine.matchCandidates(forEntryID: entry.id)
+        try await withTimeout(Self.passTimeout) { try await self.runner.matchCandidates(forEntryID: entry.id) }
     }
 
     /// Adopts the event for the entry's workout and removes its separate event. It counts

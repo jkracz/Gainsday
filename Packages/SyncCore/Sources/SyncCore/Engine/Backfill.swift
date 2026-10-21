@@ -27,17 +27,18 @@ extension SyncEngine {
             engine.ledger = DryRunLedger(ledger)
         case .commit:
             if settings.syncStartDate != syncStartDate {
-                await self.settings.save(settings)
+                // Only the start date moves, so settings changed meanwhile are kept.
+                let start = interval.start
+                await self.settings.edit { settings in
+                    settings.syncStartDate = min(settings.syncStartDate ?? start, start)
+                }
             }
         }
         let composer = EventComposer(settings: settings, clock: clock)
+        let recorder = mode == .commit ? try await ActivityRecorder(engine: self, added: found, deletedIDs: []) : nil
         let result = SyncResult(actions: try await engine.syncAdded(found, to: destination.id, settings: settings, composer: composer))
-        switch mode {
-        case .preview:
-            return result
-        case .commit:
-            return await notifyHeldWorkouts(in: ActivityRecorder(engine: self, added: found).record(result))
-        }
+        guard let recorder else { return result }
+        return await notifyHeldWorkouts(in: recorder.record(result))
     }
 
     /// Syncs workouts Health added, oldest first. Workouts from apps the allowlist
@@ -46,8 +47,9 @@ extension SyncEngine {
     func syncAdded(_ added: [Workout], to calendarID: String, settings: Settings, composer: EventComposer) async throws -> [SyncAction] {
         let (allowed, notAllowed) = settings.splitBySource(added)
         var actions = notAllowed.sorted { $0.start < $1.start }.map { SyncAction.skip(workoutID: $0.id, .sourceNotAllowed) }
+        let search = PlannedEventSearch()
         for cluster in WorkoutCluster.clusters(of: allowed) {
-            actions.append(try await sync(cluster, to: calendarID, settings: settings, composer: composer))
+            actions.append(try await sync(cluster, to: calendarID, settings: settings, composer: composer, search: search))
         }
         return actions
     }

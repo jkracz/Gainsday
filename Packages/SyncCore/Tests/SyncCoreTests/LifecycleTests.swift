@@ -126,6 +126,57 @@ struct LifecycleTests {
         #expect(await harness.ledger.allEntries.map(\.state) == [.released])
     }
 
+    @Test("A released event's workout replaced again in Health follows the replacement instead of adding a second event")
+    func releasedEntryFollowsLaterReplacement() async throws {
+        let original = SyncHarness.run()
+        let harness = SyncHarness(workouts: [original])
+        let first = try await harness.engine.run(.changes(since: nil))
+        var edited = try #require(await harness.calendar.allEvents.first)
+        edited.content.title = "Easy run with Sam"
+        await harness.calendar.put(edited)
+        let replacement = SyncHarness.run(minutes: 35, minutesAgo: 5)
+        await harness.workouts.delete(original.id)
+        await harness.workouts.add(replacement)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        let again = SyncHarness.run(minutes: 34, minutesAgo: 6)
+        await harness.workouts.delete(replacement.id)
+        await harness.workouts.add(again)
+        let third = try await harness.engine.run(.changes(since: second.nextAnchor))
+
+        #expect(third.actions == [.skip(workoutID: again.id, .alreadySynced)])
+        #expect(await harness.calendar.allEvents == [edited])
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(await harness.ledger.allEntries.count == 1)
+        #expect(entry.state == .released)
+        #expect(entry.covers(again.id))
+        #expect(entry.covers(replacement.id) == false)
+    }
+
+    @Test("A tombstoned workout replaced in Health stays out of the calendar")
+    func tombstoneFollowsReplacement() async throws {
+        let original = SyncHarness.run()
+        let harness = SyncHarness(workouts: [original])
+        let first = try await harness.engine.run(.changes(since: nil))
+        // The user undid the create: the event is gone and the workout tombstoned.
+        var tombstone = try #require(await harness.ledger.allEntries.first)
+        try await harness.calendar.delete(eventID: try #require(tombstone.eventExternalIdentifier))
+        tombstone.state = .tombstoned
+        try await harness.ledger.save(tombstone)
+
+        let replacement = SyncHarness.run(minutes: 35, minutesAgo: 5)
+        await harness.workouts.delete(original.id)
+        await harness.workouts.add(replacement)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions == [.skip(workoutID: replacement.id, .tombstoned)])
+        #expect(await harness.calendar.allEvents.isEmpty)
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(await harness.ledger.allEntries.count == 1)
+        #expect(entry.state == .tombstoned)
+        #expect(entry.covers(replacement.id))
+    }
+
     @Test("Deleting a workout in Health leaves its event alone if the user edited it")
     func healthDeleteOfEditedEventReleasesIt() async throws {
         let workout = SyncHarness.run()

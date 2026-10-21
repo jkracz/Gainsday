@@ -41,6 +41,10 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
     /// it in the calendar and its identifier may be missing or out of date. The first
     /// pass with full access finds the event and clears it.
     public var needsLinking: Bool
+    /// Set when Health deleted or replaced the workout while the app had add-only
+    /// access, so its event couldn't be changed. The first pass with full access
+    /// applies the change, and clears it.
+    public var needsHealthFollowUp: Bool
 
     public init(
         id: UUID = UUID(),
@@ -56,7 +60,8 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
         createdAt: Date,
         updatedAt: Date,
         activityType: WorkoutActivityType? = nil,
-        needsLinking: Bool = false
+        needsLinking: Bool = false,
+        needsHealthFollowUp: Bool = false
     ) {
         self.id = id
         self.workoutID = workoutID
@@ -72,6 +77,7 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
         self.updatedAt = updatedAt
         self.activityType = activityType
         self.needsLinking = needsLinking
+        self.needsHealthFollowUp = needsHealthFollowUp
     }
 
     /// Whether this entry is about the given workout, either as the cluster or as a member.

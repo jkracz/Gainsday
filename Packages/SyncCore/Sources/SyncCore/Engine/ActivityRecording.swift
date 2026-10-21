@@ -11,7 +11,9 @@ struct ActivityRecorder {
     let engine: SyncEngine
     /// The workouts the pass reads.
     let added: [Workout]
-    /// Ledger entries for the workouts deleted in Health, as they were before the pass.
+    /// Ledger entries for the workouts deleted in Health, and for the times of those
+    /// added, as they were before the pass. A late copy of a synced workout can rewrite
+    /// its event, and Undo puts back what the event held.
     let before: [LedgerEntry]
 
     init(engine: SyncEngine, added: [Workout]) {
@@ -27,21 +29,39 @@ struct ActivityRecorder {
         for deletedID in deletedIDs {
             before += try await engine.ledger.entries(forWorkout: deletedID)
         }
+        if let start = added.map(\.start).min(), let end = added.map(\.end).max() {
+            let seen = Set(before.map(\.id))
+            before += try await engine.ledger.entries(in: DateInterval(start: start, end: max(start, end)))
+                .filter { !seen.contains($0.id) }
+        }
         self.before = before
     }
 
     /// Adds the result's actions to the top of the log, keeping it to its capacity.
     func record(_ result: SyncResult) async -> SyncResult {
+        let syncStartDate = await engine.settings.load().syncStartDate
         var recorded: [ActivityLogEntry] = []
-        for action in result.actions {
+        for action in result.actions where !isOldHistory(action, syncStartDate: syncStartDate) {
             if let entry = await entry(for: action) {
                 recorded.append(entry)
             }
         }
         guard !recorded.isEmpty else { return result }
-        let log = (try? await engine.activityLog.load()) ?? []
+        var log = (try? await engine.activityLog.load()) ?? []
+        for case .release(let workoutID, let eventID) in result.actions {
+            log = log.map { $0.lettingGoOfEvent(eventID, workoutID: workoutID) }
+        }
         try? await engine.activityLog.save(Array((recorded.reversed() + log).prefix(ActivityLogEntry.capacity)))
         return result
+    }
+
+    /// Whether the action skips a workout from before the sync start date, for any
+    /// reason. Health sends the whole history again when the anchor is lost, e.g. after
+    /// a reinstall, and the filters may leave old workouts out before the date does.
+    private func isOldHistory(_ action: SyncAction, syncStartDate: Date?) -> Bool {
+        guard case .skip(let workoutID, _) = action, let syncStartDate,
+              let workout = added.first(where: { $0.id == workoutID }) else { return false }
+        return workout.start < syncStartDate
     }
 
     private func entry(for action: SyncAction) async -> ActivityLogEntry? {
@@ -97,6 +117,22 @@ struct ActivityRecorder {
             break
         }
         return entry
+    }
+}
+
+private extension ActivityLogEntry {
+    /// The entry without its Undo, if undoing it would overwrite or delete an event
+    /// the user has since edited and the app has let go of.
+    func lettingGoOfEvent(_ eventID: String, workoutID: UUID) -> ActivityLogEntry {
+        guard self.eventID == eventID || self.workoutID == workoutID else { return self }
+        switch undo {
+        case .removeCreatedEvent, .restoreEvent:
+            var entry = self
+            entry.undo = nil
+            return entry
+        default:
+            return self
+        }
     }
 }
 

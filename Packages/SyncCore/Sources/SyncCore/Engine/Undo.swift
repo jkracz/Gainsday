@@ -7,6 +7,9 @@ public enum UndoError: Error, Hashable, Sendable {
     case notUndoable
     /// Undoing an update to a planned event needs the user's choice of what happens to the workout.
     case choiceRequired
+    /// The user edited the event since the app wrote it, so it's theirs now and the app
+    /// won't delete it. The entry can't be undone any more.
+    case eventEditedByUser
 }
 
 extension SyncEngine {
@@ -37,7 +40,13 @@ extension SyncEngine {
 
         switch undo {
         case .removeCreatedEvent:
-            try await removeCreatedEvent(of: entry)
+            do {
+                try await removeCreatedEvent(of: entry)
+            } catch UndoError.eventEditedByUser {
+                log[index].undo = nil
+                try await activityLog.save(log)
+                throw UndoError.eventEditedByUser
+            }
         case .recreateEvent(let draft):
             try await recreateEvent(draft, of: entry)
         case .restoreEvent(let content):
@@ -61,9 +70,20 @@ extension SyncEngine {
     }
 
     /// Deletes the event created for the entry's workout and tombstones the workout,
-    /// so later passes never create it again.
+    /// so later passes never create it again. An event the user edited is theirs: it's
+    /// released, if it wasn't already, and kept.
     private func removeCreatedEvent(of logEntry: ActivityLogEntry) async throws {
         let entries = try await ledger.entries(forWorkout: logEntry.workoutID).filter { $0.state != .tombstoned }
+        guard !entries.contains(where: { $0.state == .released }) else { throw UndoError.eventEditedByUser }
+        for var entry in entries where entry.state == .owned {
+            guard let eventID = entry.eventExternalIdentifier,
+                  let event = try await calendar.event(withID: eventID),
+                  !event.content.matches(entry.written) else { continue }
+            entry.state = .released
+            entry.updatedAt = clock.now
+            try await ledger.save(entry)
+            throw UndoError.eventEditedByUser
+        }
         // With no live ledger entry left, fall back to the event the log remembers.
         let eventIDs = entries.isEmpty ? [logEntry.eventID].compactMap(\.self) : entries.compactMap(\.eventExternalIdentifier)
         for eventID in Set(eventIDs) where try await calendar.event(withID: eventID) != nil {

@@ -85,6 +85,52 @@ struct AddOnlyModeTests {
         #expect(await harness.ledger.allEntries.map(\.state) == [.released])
     }
 
+    @Test("A workout deleted in Health while the app had add-only access has its event deleted after upgrading")
+    func healthDeleteInAddOnlyModeIsCaughtUp() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout], accessMode: .addOnly)
+        let first = try await harness.engine.run(.changes(since: nil))
+        let written = try #require(await harness.calendar.allEvents.first)
+        await harness.workouts.delete(workout.id)
+        let skipped = try await harness.engine.run(.changes(since: first.nextAnchor))
+        #expect(skipped.actions == [.skip(workoutID: workout.id, .requiresFullAccess)])
+
+        await harness.calendar.setAccessMode(.full)
+        let upgraded = try await harness.engine.run(.changes(since: skipped.nextAnchor))
+
+        #expect(upgraded.actions == [.delete(workoutID: workout.id, eventID: written.id)])
+        #expect(await harness.calendar.allEvents.isEmpty)
+        #expect(await harness.ledger.allEntries.isEmpty)
+    }
+
+    @Test("A workout replaced in Health while the app had add-only access has its event rewritten after upgrading")
+    func healthReplacementInAddOnlyModeIsCaughtUp() async throws {
+        let original = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let harness = SyncHarness(workouts: [original], accessMode: .addOnly)
+        let first = try await harness.engine.run(.changes(since: nil))
+        let written = try #require(await harness.calendar.allEvents.first)
+        let replacement = SyncHarness.run(minutes: 35, minutesAgo: 5)
+        await harness.workouts.delete(original.id)
+        await harness.workouts.add(replacement)
+        let skipped = try await harness.engine.run(.changes(since: first.nextAnchor))
+        #expect(skipped.actions == [.skip(workoutID: replacement.id, .requiresFullAccess)])
+
+        await harness.calendar.setAccessMode(.full)
+        let upgraded = try await harness.engine.run(.changes(since: skipped.nextAnchor))
+
+        let event = try #require(await harness.calendar.allEvents.first)
+        #expect(await harness.calendar.allEvents.count == 1)
+        #expect(event.id == written.id)
+        #expect(event.content.start == replacement.start)
+        #expect(event.content.notes?.hasSuffix(replacement.shortID) == true)
+        #expect(upgraded.actions == [.update(workoutID: replacement.id, eventID: written.id, event.content)])
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(entry.written == event.content)
+
+        let again = try await harness.engine.run(.changes(since: upgraded.nextAnchor))
+        #expect(again.actions.isEmpty)
+    }
+
     @Test("An event the user deleted while the app had add-only access isn't recreated after upgrading")
     func deleteMadeInAddOnlyModeIsRespected() async throws {
         let workout = SyncHarness.run()

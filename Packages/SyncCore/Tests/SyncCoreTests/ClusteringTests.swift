@@ -76,6 +76,26 @@ struct ClusteringTests {
         #expect(entry.written == updated.content)
     }
 
+    @Test("A late Watch copy's update is logged with an Undo that puts back Strava's values")
+    func lateWatchCopyUpdateCanBeUndone() async throws {
+        let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let stravaRun = SyncHarness.stravaCopy(of: watchRun)
+        let harness = SyncHarness(workouts: [stravaRun])
+        let first = try await harness.engine.run(.changes(since: nil))
+        let stravaEvent = try #require(await harness.calendar.allEvents.first)
+        await harness.workouts.add(watchRun)
+        _ = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        let logged = try #require(await harness.activityLog.entries.first)
+        #expect(logged.undo == .restoreEvent(stravaEvent.content))
+        #expect(logged.title == (await harness.calendar.allEvents.first?.content.title))
+
+        try await harness.engine.undo(entryID: logged.id)
+
+        #expect(await harness.calendar.allEvents.map(\.content) == [stravaEvent.content])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
+    }
+
     @Test("A late Watch copy leaves an event the user edited alone and releases it")
     func lateWatchCopyReleasesEditedEvent() async throws {
         let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)

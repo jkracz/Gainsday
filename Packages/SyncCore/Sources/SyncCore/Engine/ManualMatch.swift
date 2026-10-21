@@ -9,6 +9,8 @@ public enum ManualMatchError: Error, Hashable, Sendable {
     case eventNotOffered
     /// The workout is no longer in Health.
     case workoutNotFound
+    /// The workout wasn't added as an event, e.g. because the filters now leave it out.
+    case notAdded(SkipReason)
 }
 
 extension ActivityLogEntry {
@@ -146,7 +148,8 @@ extension SyncEngine {
         let settings = await settings.load()
         guard let destination = settings.destinationCalendar?.id ?? workout.separate?.calendarID else { return [] }
         // Changing an event with guests can email every one of them.
-        return try await plannedEventCandidates(for: workout.cluster.preferred, destination: destination, settings: settings)
+        let calendarIDs = try await searchCalendarIDs(destination: destination, settings: settings)
+        return try await plannedEventCandidates(for: workout.cluster.preferred, in: calendarIDs, settings: settings)
             .filter { $0.attendeeCount == 0 }
     }
 }

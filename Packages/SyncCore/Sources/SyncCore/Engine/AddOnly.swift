@@ -42,12 +42,13 @@ extension SyncEngine {
 
     /// Once the user grants full access, finds each event written in add-only mode in
     /// its calendar, by identifier, footer, or title and times, and records its current
-    /// identifier. Returns a relink for each entry whose identifier changed.
+    /// identifier. Returns a relink for each entry whose identifier changed. Then applies
+    /// the Health deletes and replacements the app couldn't apply in add-only mode.
     ///
     /// The snapshot of what the app wrote is kept, so edits the user made in the
     /// meantime are still spotted later. An event that can't be found is left to the
     /// lifecycle rules, which treat it as deleted by the user.
-    func linkEventsAddedWithoutReadAccess() async throws -> [SyncAction] {
+    func linkEventsAddedWithoutReadAccess(settings: Settings, composer: EventComposer) async throws -> [SyncAction] {
         guard await calendar.accessMode() == .full else { return [] }
         var actions: [SyncAction] = []
         for pending in try await ledger.entriesNeedingLinking() {
@@ -62,7 +63,35 @@ extension SyncEngine {
             }
             entry.updatedAt = clock.now
             try await ledger.save(entry)
+            if entry.needsHealthFollowUp, let action = try await followUpHealthChange(to: entry, settings: settings, composer: composer) {
+                actions.append(action)
+            }
         }
         return actions
+    }
+
+    /// Applies a Health delete or replacement that add-only access held back: an event
+    /// whose workout is gone from Health is deleted, and one whose workout was replaced
+    /// shows the replacement's values. An event the user edited or deleted meanwhile is
+    /// released or tombstoned instead, as in a pass.
+    private func followUpHealthChange(to entry: LedgerEntry, settings: Settings, composer: EventComposer) async throws -> SyncAction? {
+        var entry = entry
+        entry.needsHealthFollowUp = false
+        try await ledger.save(entry)
+        guard [.owned, .adopted].contains(entry.state), let eventID = entry.eventExternalIdentifier else { return nil }
+        let inHealth = settings.splitBySource(try await healthWorkouts(in: entry)).allowed
+        if let workout = inHealth.first(where: { $0.id == entry.workoutID }) ?? inHealth.min(by: Workout.isPreferred) {
+            entry.takeIdentity(from: workout)
+            return try await rewrite(entry, for: workout, composer: composer)
+        }
+        if let blocked = try await blockedChange(to: entry, eventID: eventID, workoutID: entry.workoutID) {
+            return blocked
+        }
+        if entry.state == .adopted {
+            return try await removeWorkoutSection(of: entry, eventID: eventID, workoutID: entry.workoutID)
+        }
+        try await calendar.delete(eventID: eventID)
+        try await ledger.delete(entryID: entry.id)
+        return .delete(workoutID: entry.workoutID, eventID: eventID)
     }
 }

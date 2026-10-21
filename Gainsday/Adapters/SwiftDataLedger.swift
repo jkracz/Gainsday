@@ -26,6 +26,7 @@ nonisolated final class LedgerRecord {
     /// The `WorkoutActivityType` raw value.
     var activityType: Int?
     var needsLinking: Bool = false
+    var needsHealthFollowUp: Bool = false
 
     init(_ entry: LedgerEntry) {
         update(from: entry)
@@ -46,6 +47,7 @@ nonisolated final class LedgerRecord {
         updatedAt = entry.updatedAt
         activityType = entry.activityType.map { Int($0.rawValue) }
         needsLinking = entry.needsLinking
+        needsHealthFollowUp = entry.needsHealthFollowUp
     }
 
     var entry: LedgerEntry {
@@ -64,7 +66,8 @@ nonisolated final class LedgerRecord {
             createdAt: createdAt,
             updatedAt: updatedAt,
             activityType: activityType.flatMap { UInt(exactly: $0) }.map(WorkoutActivityType.init(rawValue:)),
-            needsLinking: needsLinking
+            needsLinking: needsLinking,
+            needsHealthFollowUp: needsHealthFollowUp
         )
     }
 }
