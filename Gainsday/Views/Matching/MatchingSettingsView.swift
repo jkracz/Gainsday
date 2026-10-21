@@ -16,48 +16,66 @@ struct MatchingSettingsView: View {
                 Text("When a workout matches an event you planned, such as \"Run with Sam\", Gainsday uses that event instead of adding another.")
             }
 
-            Group {
-                Section {
-                    Picker("When a Workout Matches", selection: matchMode) {
-                        Text("Update Planned Event").tag(MatchMode.updatePlannedEvent)
-                        Text("Create Separate Event").tag(MatchMode.createSeparateEvent)
-                    }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
-                    Toggle("Also Rename", isOn: renameMatchedEvents)
-                        .disabled(coordinator.settings.matchMode != .updatePlannedEvent)
-                } header: {
-                    Text("When a Workout Matches")
-                } footer: {
-                    Text(modeFooter)
+            // With add-only access every setting stays in view, greyed out, so the user
+            // can see what full access would allow.
+            if !hasFullAccess || coordinator.settings.matchingEnabled {
+                if hasFullAccess {
+                    matchingDetails
+                } else {
+                    matchingDetails
+                        .disabled(true)
+                        .foregroundStyle(.secondary)
                 }
-
-                Section {
-                    SearchCalendarsLink()
-                    Picker("Time Window", selection: matchWindow) {
-                        ForEach(windowChoices, id: \.self) { seconds in
-                            Text(Self.label(forWindow: seconds)).tag(seconds)
-                        }
-                    }
-                    MatchKeywordsLink()
-                } header: {
-                    Text("Finding Plans")
-                } footer: {
-                    Text("A plan that doesn't overlap the workout must start within the time window of it, on the same day.")
-                }
-                // Separate events never look for a plan, so nothing is ever unclear either.
-                .disabled(coordinator.settings.matchMode == .createSeparateEvent)
-
-                UnclearMatchSettingsSection()
-                    .disabled(coordinator.settings.matchMode == .createSeparateEvent)
             }
-            .disabled(!canEditMatching)
         }
         .navigationTitle("Planned Workouts")
     }
 
-    private var canEditMatching: Bool {
-        coordinator.hasFullCalendarAccess && coordinator.settings.matchingEnabled
+    /// What happens on a match and how plans are found.
+    @ViewBuilder
+    private var matchingDetails: some View {
+        Section {
+            Picker("When a Workout Matches", selection: matchMode) {
+                Text("Update Planned Event").tag(MatchMode.updatePlannedEvent)
+                Text("Create Separate Event").tag(MatchMode.createSeparateEvent)
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+            if updatesPlans {
+                Toggle("Also Rename", isOn: renameMatchedEvents)
+            }
+        } header: {
+            Text("When a Workout Matches")
+        } footer: {
+            Text(modeFooter)
+        }
+
+        // Separate events never look for a plan, so nothing is ever unclear either.
+        if updatesPlans {
+            Section {
+                SearchCalendarsLink()
+                Picker("Time Window", selection: matchWindow) {
+                    ForEach(windowChoices, id: \.self) { seconds in
+                        Text(Self.label(forWindow: seconds)).tag(seconds)
+                    }
+                }
+                MatchKeywordsLink()
+            } header: {
+                Text("Finding Plans")
+            } footer: {
+                Text("A plan that doesn't overlap the workout must start within the time window of it, on the same day.")
+            }
+
+            UnclearMatchSettingsSection()
+        }
+    }
+
+    private var hasFullAccess: Bool {
+        coordinator.hasFullCalendarAccess
+    }
+
+    private var updatesPlans: Bool {
+        coordinator.settings.matchMode == .updatePlannedEvent
     }
 
     private var modeFooter: LocalizedStringKey {
