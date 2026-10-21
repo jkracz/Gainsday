@@ -23,6 +23,7 @@ struct MatchEventView: View {
                             } label: {
                                 CandidateRow(event: event, calendarTitle: calendarTitles[event.calendarID])
                             }
+                            .tint(.primary)
                             .disabled(isMatching)
                         }
                     } header: {
@@ -86,7 +87,6 @@ private struct CandidateRow: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(verbatim: event.content.title)
                 .font(.headline)
-                .foregroundStyle(.primary)
             Text(event.content.start..<max(event.content.start, event.content.end), format: .interval.hour().minute())
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
