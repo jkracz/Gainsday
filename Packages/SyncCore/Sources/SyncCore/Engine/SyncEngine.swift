@@ -52,9 +52,10 @@ public struct SyncEngine: Sendable {
             let changes = try await readChanges(since: anchor)
             let recorder = try await ActivityRecorder(engine: self, added: changes.added, deletedIDs: changes.deletedIDs)
             let composer = EventComposer(settings: settings, clock: clock)
+            let linked = try await linkEventsAddedWithoutReadAccess()
             let followed = try await followDeletions(in: changes, settings: settings, composer: composer)
             let added = try await syncAdded(followed.remaining, to: destination.id, settings: settings, composer: composer)
-            return await recorder.record(SyncResult(actions: followed.actions + added, nextAnchor: changes.anchor))
+            return await recorder.record(SyncResult(actions: linked + followed.actions + added, nextAnchor: changes.anchor))
         case .backfill(let interval, let mode):
             return try await backfill(interval, mode: mode)
         }
@@ -73,6 +74,9 @@ public struct SyncEngine: Sendable {
         }
 
         let draft = EventDraft(calendarID: calendarID, content: composer.content(for: workout), availability: .free)
+        if await calendar.accessMode() == .addOnly {
+            return try await createWithoutReadAccess(for: workout, draft)
+        }
         let event = try await createEvent(draft)
         let now = clock.now
         do {

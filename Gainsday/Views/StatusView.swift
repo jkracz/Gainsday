@@ -27,6 +27,10 @@ struct StatusView: View {
                     }
                 }
 
+                if !coordinator.hasFullCalendarAccess {
+                    CalendarAccessSection()
+                }
+
                 Section("Last Sync") {
                     if coordinator.isSyncing {
                         LabeledContent("Syncing…") {
