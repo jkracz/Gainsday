@@ -45,6 +45,46 @@ struct ActivityLogTests {
         #expect(await harness.calendar.allEvents.isEmpty)
     }
 
+    @Test("Once a pass releases an event the user edited, its create can't be undone")
+    func releasedCreateCantBeUndone() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        let first = try await harness.engine.run(.changes(since: nil))
+        let create = try #require(await harness.activityLog.entries.first)
+        var edited = try #require(await harness.calendar.allEvents.first)
+        edited.content.title = "Easy run with Sam"
+        await harness.calendar.put(edited)
+        await harness.workouts.delete(workout.id)
+        _ = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        let logged = try #require(await harness.activityLog.entries.first { $0.id == create.id })
+        #expect(logged.canUndo == false)
+        await #expect(throws: UndoError.notUndoable) {
+            try await harness.engine.undo(entryID: create.id)
+        }
+        #expect(await harness.calendar.allEvents == [edited])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
+    }
+
+    @Test("Undoing a create whose event the user edited since refuses, keeps the event and lets go of it")
+    func undoCreateOfEditedEventRefuses() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        _ = try await harness.engine.run(.changes(since: nil))
+        let create = try #require(await harness.activityLog.entries.first)
+        var edited = try #require(await harness.calendar.allEvents.first)
+        edited.content.notes = "Felt great"
+        await harness.calendar.put(edited)
+
+        await #expect(throws: UndoError.eventEditedByUser) {
+            try await harness.engine.undo(entryID: create.id)
+        }
+
+        #expect(await harness.calendar.allEvents == [edited])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
+        #expect(await harness.activityLog.entries.first?.canUndo == false)
+    }
+
     @Test("The log keeps the newest 50 entries, newest first")
     func logIsCapped() async throws {
         let harness = SyncHarness()
@@ -152,6 +192,31 @@ struct ActivityLogTests {
         #expect(again.actions.count == 2)
         #expect(await harness.activityLog.entries == logged)
         #expect(logged.map(\.workoutID) == [synced.id])
+    }
+
+    @Test("Old workouts the filters leave out don't flood the log either, whatever the reason")
+    func oldFilteredHistoryIsNotLogged() async throws {
+        let oldWalk = Workout(
+            activityType: .walking,
+            start: SyncHarness.now.addingTimeInterval(-9 * 24 * 60 * 60),
+            end: SyncHarness.now.addingTimeInterval(-9 * 24 * 60 * 60 + 30 * 60),
+            source: SyncHarness.watch
+        )
+        let oldShortRun = SyncHarness.run(minutes: 3, minutesAgo: 8 * 24 * 60)
+        let oldStravaRun = Workout(
+            activityType: .running,
+            start: SyncHarness.now.addingTimeInterval(-10 * 24 * 60 * 60),
+            end: SyncHarness.now.addingTimeInterval(-10 * 24 * 60 * 60 + 30 * 60),
+            source: WorkoutSourceApp(bundleIdentifier: "com.strava.stravaride", name: "Strava")
+        )
+        var settings = SyncHarness.defaultSettings
+        settings.sourceAllowlist = [SyncHarness.watch.bundleIdentifier]
+        let harness = SyncHarness(workouts: [oldWalk, oldShortRun, oldStravaRun], settings: settings)
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        #expect(result.actions.count == 3)
+        #expect(await harness.activityLog.entries.isEmpty)
     }
 
     @Test("A skip for a reason the user can act on is logged, but can't be undone")

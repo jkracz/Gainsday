@@ -16,7 +16,8 @@ extension ActivityLogEntry {
 /// review again. [v1.1]
 extension SyncEngine {
     /// Adds the held workout as its own event, as if no plan had matched, and logs it
-    /// with an Undo that holds it for review again.
+    /// with an Undo that holds it for review again. Throws `ManualMatchError.notAdded`
+    /// and leaves the workout held when it isn't added, e.g. the filters now leave it out.
     ///
     /// Needs full calendar access, and throws `CalendarStoreError.requiresFullAccess`
     /// in add-only mode.
@@ -26,6 +27,10 @@ extension SyncEngine {
         let (actions, _) = try await syncSeparately(workout.cluster.members)
         let preferred = workout.cluster.preferred
         guard let action = actions.first else { throw ManualMatchError.workoutNotFound }
+        if case .skip(_, let reason) = action {
+            // Nothing was added, so the workout still waits for review.
+            throw ManualMatchError.notAdded(reason)
+        }
         var entry = ActivityLogEntry(
             date: clock.now,
             action: action,

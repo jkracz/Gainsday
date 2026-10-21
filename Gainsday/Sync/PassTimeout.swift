@@ -14,6 +14,7 @@ struct PassTimedOut: LocalizedError, Equatable {
 /// Runs `operation`, or throws `PassTimedOut` once `timeout` has passed. The operation
 /// can't be stopped from outside, so after a timeout it keeps going on its own.
 /// `SyncRunner` still runs passes one at a time, so a later pass waits for it.
+@discardableResult
 func withTimeout<T>(_ timeout: Duration, _ operation: @escaping () async throws -> T) async throws -> T {
     let work = Task { try await operation() }
     return try await withCheckedThrowingContinuation { continuation in

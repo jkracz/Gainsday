@@ -6,6 +6,8 @@ import SwiftUI
     @State private var coordinator: SyncCoordinator
 
     init() {
+        // Listen for the ledger's first iCloud import before the container starts CloudKit.
+        let cloudImport = CloudImportMonitor()
         let container: ModelContainer
         do {
             container = try SwiftDataLedger.makeContainer()
@@ -13,7 +15,7 @@ import SwiftUI
             // Syncing without the ledger would create duplicates, so don't run at all.
             fatalError("Couldn't open the ledger: \(error)")
         }
-        let coordinator = SyncCoordinator(ledger: SwiftDataLedger(modelContainer: container))
+        let coordinator = SyncCoordinator(ledger: SwiftDataLedger(modelContainer: container), cloudImport: cloudImport)
         coordinator.startBackgroundSync()
         _coordinator = State(initialValue: coordinator)
     }

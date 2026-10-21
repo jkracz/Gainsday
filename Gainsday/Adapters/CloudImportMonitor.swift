@@ -5,12 +5,15 @@ import Foundation
 /// the first pass after a reinstall doesn't race the download and duplicate events.
 ///
 /// SwiftData syncs through `NSPersistentCloudKitContainer`, which posts an event for
-/// each import. Create the monitor early in launch so it sees the first one.
+/// each import. Create the monitor before the ledger's container, so it sees the first
+/// one. Only the first pass on an install waits: if no import is seen by then, later
+/// passes rely on the footer scan rather than wait again.
 final class CloudImportMonitor {
     /// How long the first pass waits before going ahead. With full access, the
     /// footer scan still stops duplicates if the import is slower than this.
     nonisolated static let defaultTimeout: Duration = .seconds(20)
     private static let importedKey = "hasImportedLedgerOnce"
+    private static let waitedKey = "hasWaitedForLedgerImport"
 
     private let defaults: UserDefaults
     private let hasICloudAccount: () -> Bool
@@ -45,8 +48,11 @@ final class CloudImportMonitor {
         defaults.set(true, forKey: Self.importedKey)
     }
 
-    /// Waits until the monitor is ready. Returns false if `timeout` passed first.
+    /// Waits until the monitor is ready, on the first pass after installing only.
+    /// Returns false if `timeout` passed first, or an earlier wait already gave up.
     func waitForInitialImport(timeout: Duration = defaultTimeout) async -> Bool {
+        guard !defaults.bool(forKey: Self.waitedKey) else { return isReady }
+        defer { defaults.set(true, forKey: Self.waitedKey) }
         let deadline = ContinuousClock.now + timeout
         while !isReady {
             guard ContinuousClock.now < deadline, !Task.isCancelled else { return false }

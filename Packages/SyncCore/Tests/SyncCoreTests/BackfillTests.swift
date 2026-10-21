@@ -100,6 +100,22 @@ struct BackfillTests {
         #expect(await harness.settings.load().syncStartDate == range.start)
     }
 
+    @Test("A commit keeps settings the user changed while it ran, and still moves the sync start date back")
+    func commitKeepsConcurrentSettingsChange() async throws {
+        let older = SyncHarness.run(minutesAgo: 10 * 24 * 60)
+        let harness = SyncHarness(workouts: [older])
+        var engine = harness.engine
+        // The user turns the footer off just after the backfill read the settings.
+        let settings = SettingsChangedAfterFirstLoad(SyncHarness.defaultSettings) { $0.footerEnabled = false }
+        engine.settings = settings
+
+        _ = try await engine.run(.backfill(SyncHarness.lastDays(14), .commit))
+
+        let saved = await settings.load()
+        #expect(saved.footerEnabled == false)
+        #expect(saved.syncStartDate == SyncHarness.lastDays(14).start)
+    }
+
     @Test("Repeating a backfill over the same range creates nothing new")
     func repeatIsNoOp() async throws {
         let workouts = [SyncHarness.run(minutesAgo: 10 * 24 * 60), SyncHarness.run(minutesAgo: 2 * 24 * 60)]
@@ -197,5 +213,33 @@ extension SyncAction {
     /// The workout an event is created for, or nil for any other action.
     var createdWorkoutID: UUID? {
         if case .create(let workoutID, _) = self { workoutID } else { nil }
+    }
+}
+
+/// A settings store where the user changes a setting straight after the first load.
+private actor SettingsChangedAfterFirstLoad: SettingsStore {
+    private var settings: Settings
+    private var change: (@Sendable (inout Settings) -> Void)?
+
+    init(_ settings: Settings, change: @escaping @Sendable (inout Settings) -> Void) {
+        self.settings = settings
+        self.change = change
+    }
+
+    func load() async -> Settings {
+        defer {
+            change?(&settings)
+            change = nil
+        }
+        return settings
+    }
+
+    func save(_ settings: Settings) async {
+        self.settings = settings
+    }
+
+    func edit(_ change: @escaping @Sendable (inout Settings) -> Void) async -> Settings {
+        change(&settings)
+        return settings
     }
 }

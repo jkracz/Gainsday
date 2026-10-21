@@ -54,6 +54,25 @@ struct SettingsCodingTests {
         #expect(restored.renameMatchedEvents == false)
     }
 
+    @Test("Settings saved by the first release, whose empty type list meant every type, load with the default types")
+    func firstReleaseEmptyTypesMigrate() throws {
+        let json = #"{"enabledTypes":[],"minimumDuration":600,"footerEnabled":true,"preferredAccessMode":"full","syncStartDate":0}"#
+
+        let restored = try JSONDecoder().decode(Settings.self, from: Data(json.utf8))
+
+        #expect(restored.enabledTypes == Settings.defaultEnabledTypes)
+    }
+
+    @Test("A type list the user emptied in this version stays empty")
+    func emptiedTypesStayEmpty() throws {
+        var settings = Settings()
+        settings.enabledTypes = []
+
+        let restored = try JSONDecoder().decode(Settings.self, from: JSONEncoder().encode(settings))
+
+        #expect(restored.enabledTypes.isEmpty)
+    }
+
     @Test("An empty backup loads as the defaults")
     func emptyBackupLoads() throws {
         let restored = try JSONDecoder().decode(Settings.self, from: Data("{}".utf8))

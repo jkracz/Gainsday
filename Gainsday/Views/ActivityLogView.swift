@@ -6,8 +6,12 @@ struct ActivityLogView: View {
     @Environment(SyncCoordinator.self) private var coordinator
     @State private var confirming: ActivityLogEntry?
     @State private var undoFailed = false
+    /// Undo refused because the user edited the event, which is theirs now.
+    @State private var undoRefusedForEdit = false
     @State private var matching: ActivityLogEntry?
     @State private var addFailed = false
+    /// Why a held workout wasn't added, when the engine said.
+    @State private var notAddedReason: SkipReason?
 
     private var canUndo: Bool { coordinator.hasFullCalendarAccess && !coordinator.isSyncing }
 
@@ -89,12 +93,20 @@ struct ActivityLogView: View {
         .alert("Couldn't Add the Event", isPresented: $addFailed) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("The workout may have changed in Health. Try again later.")
+            if let notAddedReason {
+                Text(notAddedReason.logDescription)
+            } else {
+                Text("The workout may have changed in Health. Try again later.")
+            }
         }
         .alert("Couldn't Undo", isPresented: $undoFailed) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("The event may have changed or been deleted. Check your calendar, then try again.")
+            if undoRefusedForEdit {
+                Text("You changed this event in your calendar, so it's yours now and Gainsday won't delete it.")
+            } else {
+                Text("The event may have changed or been deleted. Check your calendar, then try again.")
+            }
         }
     }
 
@@ -102,6 +114,11 @@ struct ActivityLogView: View {
         do {
             try await coordinator.addSeparateEvent(for: entry)
         } catch {
+            if case ManualMatchError.notAdded(let reason) = error {
+                notAddedReason = reason
+            } else {
+                notAddedReason = nil
+            }
             addFailed = true
         }
     }
@@ -110,7 +127,10 @@ struct ActivityLogView: View {
         do {
             try await coordinator.undo(entry, choice: choice)
         } catch {
+            undoRefusedForEdit = error as? UndoError == .eventEditedByUser
             undoFailed = true
+            // The entry can't be undone any more.
+            await coordinator.refreshActivityLog()
         }
     }
 }

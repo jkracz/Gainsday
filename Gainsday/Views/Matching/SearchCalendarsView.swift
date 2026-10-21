@@ -87,7 +87,7 @@ struct SearchCalendarsView: View {
         coordinator.updateSettings { $0.searchCalendars = searched }
     }
 
-    private static func reference(_ calendar: CalendarInfo) -> CalendarReference {
+    private nonisolated static func reference(_ calendar: CalendarInfo) -> CalendarReference {
         CalendarReference(id: calendar.id, title: calendar.title)
     }
 }

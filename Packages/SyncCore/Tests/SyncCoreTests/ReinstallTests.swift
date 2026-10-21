@@ -171,6 +171,36 @@ struct ReinstallTests {
         #expect(survivors.first != older.id)
     }
 
+    @Test("When duplicate entries link different events, the losing entry's unedited event is deleted")
+    func duplicateWithOtherEventDeletesIt() async throws {
+        let workout = SyncHarness.run()
+        let (harness, kept, duplicate) = try await SyncHarness.withDuplicateEvents(for: workout)
+
+        _ = try await harness.engine.run(.changes(since: nil))
+
+        #expect(await harness.calendar.allEvents == [kept])
+        #expect(await harness.ledger.allEntries.map(\.eventExternalIdentifier) == [kept.id])
+        #expect(await harness.calendar.allEvents.contains { $0.id == duplicate.id } == false)
+    }
+
+    @Test("When duplicate entries link different events, and the user edited the losing one, it's kept and released")
+    func duplicateWithEditedEventIsReleased() async throws {
+        let workout = SyncHarness.run()
+        let (harness, kept, duplicate) = try await SyncHarness.withDuplicateEvents(for: workout)
+        var edited = duplicate
+        edited.content.title = "Run with Sam"
+        await harness.calendar.put(edited)
+
+        _ = try await harness.engine.run(.changes(since: nil))
+        let again = try await harness.engine.run(.changes(since: nil))
+
+        #expect(Set(await harness.calendar.allEvents) == [kept, edited])
+        let entries = await harness.ledger.allEntries
+        #expect(entries.first { $0.eventExternalIdentifier == kept.id }?.state == .owned)
+        #expect(entries.first { $0.eventExternalIdentifier == edited.id }?.state == .released)
+        #expect(again.actions == [.skip(workoutID: workout.id, .alreadySynced)])
+    }
+
     @Test("A collapsed duplicate's cluster members stay covered by the surviving entry")
     func duplicatesKeepEveryMember() async throws {
         let workout = SyncHarness.run()
@@ -260,6 +290,23 @@ extension SyncHarness {
         var event = try #require(await earlier.calendar.allEvents.first)
         event.id = id
         return event
+    }
+
+    /// Two devices each synced the workout before iCloud merged their ledgers: the newer
+    /// entry links `kept`, the older one `duplicate`.
+    static func withDuplicateEvents(for workout: Workout) async throws -> (SyncHarness, kept: CalendarEvent, duplicate: CalendarEvent) {
+        let harness = SyncHarness(workouts: [workout])
+        let kept = try await eventLeftByEarlierInstall(for: workout, id: "kept")
+        let duplicate = try await eventLeftByEarlierInstall(for: workout, id: "duplicate")
+        await harness.calendar.put(kept)
+        await harness.calendar.put(duplicate)
+        var survivor = ownedEntry(for: workout, eventID: kept.id)
+        survivor.written = kept.content
+        var loser = ownedEntry(for: workout, eventID: duplicate.id, updatedAt: now.addingTimeInterval(-3600))
+        loser.written = duplicate.content
+        try await harness.ledger.save(survivor)
+        try await harness.ledger.save(loser)
+        return (harness, kept, duplicate)
     }
 
     /// An owned ledger entry linking the workout to an event, as an earlier pass would write it.
