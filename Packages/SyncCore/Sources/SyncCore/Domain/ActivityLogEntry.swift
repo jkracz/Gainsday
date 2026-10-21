@@ -60,6 +60,17 @@ extension ActivityLogEntry {
         case restoreEvent(EventContent)
         /// Undo a delete: create the event again as it was, and leave it alone afterwards.
         case recreateEvent(EventDraft)
+        /// Undo an update to a planned event: put back the event as the user planned it,
+        /// and let go of it. The user chooses what happens to the workout. [v1.1]
+        case restorePlannedEvent(EventContent)
+    }
+
+    /// What happens to the workout once an update to a planned event is undone. [v1.1]
+    public enum PlannedEventUndoChoice: Hashable, Codable, Sendable {
+        /// The workout gets its own event, as if no plan had matched.
+        case separateEvent
+        /// The workout is left out of the calendar for good.
+        case dropWorkout
     }
 }
 
@@ -69,7 +80,7 @@ extension SyncAction {
         switch self {
         case .create(let workoutID, _), .update(let workoutID, _, _), .delete(let workoutID, _),
              .skip(let workoutID, _), .release(let workoutID, _), .holdForReview(let workoutID),
-             .relink(let workoutID, _), .adopt(let workoutID, _, _, _):
+             .relink(let workoutID, _), .adopt(let workoutID, _, _, _), .removeWorkoutSection(let workoutID, _, _):
             workoutID
         }
     }

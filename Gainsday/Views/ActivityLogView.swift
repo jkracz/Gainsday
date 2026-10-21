@@ -41,7 +41,15 @@ struct ActivityLogView: View {
             titleVisibility: .visible,
             presenting: confirming
         ) { entry in
-            if let kind = entry.undo {
+            if let choices = entry.undo?.plannedEventChoices {
+                ForEach(choices, id: \.self) { choice in
+                    Button {
+                        Task { await undo(entry, choice: choice) }
+                    } label: {
+                        Text(choice.confirmationButton)
+                    }
+                }
+            } else if let kind = entry.undo {
                 Button(role: kind == .removeCreatedEvent ? .destructive : nil) {
                     Task { await undo(entry) }
                 } label: {
@@ -60,9 +68,9 @@ struct ActivityLogView: View {
         }
     }
 
-    private func undo(_ entry: ActivityLogEntry) async {
+    private func undo(_ entry: ActivityLogEntry, choice: ActivityLogEntry.PlannedEventUndoChoice? = nil) async {
         do {
-            try await coordinator.undo(entry)
+            try await coordinator.undo(entry, choice: choice)
         } catch {
             undoFailed = true
         }

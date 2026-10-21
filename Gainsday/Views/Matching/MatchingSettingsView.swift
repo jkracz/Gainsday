@@ -32,8 +32,6 @@ struct MatchingSettingsView: View {
                     Text(modeFooter)
                 }
 
-                // #19 adds the on-device model and hold-for-review toggles here, as their own view.
-
                 Section {
                     SearchCalendarsLink()
                     Picker("Time Window", selection: matchWindow) {
@@ -47,8 +45,11 @@ struct MatchingSettingsView: View {
                 } footer: {
                     Text("A plan that doesn't overlap the workout must start within the time window of it, on the same day.")
                 }
-                // Separate events never look for a plan.
+                // Separate events never look for a plan, so nothing is ever unclear either.
                 .disabled(coordinator.settings.matchMode == .createSeparateEvent)
+
+                UnclearMatchSettingsSection()
+                    .disabled(coordinator.settings.matchMode == .createSeparateEvent)
             }
             .disabled(!canEditMatching)
         }

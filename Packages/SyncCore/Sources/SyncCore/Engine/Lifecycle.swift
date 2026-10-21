@@ -13,7 +13,8 @@ extension SyncEngine {
     /// Before touching an owned event, the engine compares it with what it last wrote.
     /// If the user edited it, the event is released and left alone from then on. If
     /// the user deleted it, the workout is tombstoned so it's never recreated.
-    /// Released and tombstoned entries are left alone; adopted events are [v1.1].
+    /// Released and tombstoned entries are left alone. Adopted events keep their time
+    /// and lose only the workout section (see `AdoptedLifecycle.swift`).
     ///
     /// Returns the actions taken and the added workouts that still need syncing.
     func followDeletions(
@@ -26,7 +27,7 @@ extension SyncEngine {
         for deletedID in changes.deletedIDs {
             // Collapse iCloud duplicates and fix a changed identifier first, so an event
             // that's still there isn't mistaken for one the user deleted.
-            guard let resolved = try await resolvedEntry(forWorkout: deletedID), resolved.state == .owned else { continue }
+            guard let resolved = try await resolvedEntry(forWorkout: deletedID), [.owned, .adopted].contains(resolved.state) else { continue }
             let entry = try await correctExternalIdentifier(of: resolved)
             let survivors = entry.memberIDs.subtracting(changes.deletedIDs)
             if !survivors.isEmpty {
@@ -80,6 +81,9 @@ extension SyncEngine {
         if let blocked = try await blockedChange(to: entry, eventID: eventID, workoutID: deletedID) {
             return blocked
         }
+        if entry.state == .adopted {
+            return try await removeWorkoutSection(of: entry, eventID: eventID, workoutID: deletedID)
+        }
         try await calendar.delete(eventID: eventID)
         try await ledger.delete(entryID: entry.id)
         return .delete(workoutID: deletedID, eventID: eventID)
@@ -89,6 +93,9 @@ extension SyncEngine {
     /// names as the workout's, and saves the entry. An entry with no event to
     /// change, e.g. a tombstone, is only saved.
     func rewrite(_ entry: LedgerEntry, for workout: Workout, composer: EventComposer) async throws -> SyncAction {
+        if entry.state == .adopted {
+            return try await rewriteAdopted(entry, for: workout, composer: composer)
+        }
         var entry = entry
         entry.updatedAt = clock.now
         guard entry.state == .owned, let eventID = entry.eventExternalIdentifier else {
@@ -105,12 +112,12 @@ extension SyncEngine {
         return .update(workoutID: workout.id, eventID: updated.id, updated.content)
     }
 
-    /// Checks an owned event before the app changes it. When it can't be changed,
+    /// Checks an owned or adopted event before the app changes it. When it can't be changed,
     /// saves the entry and returns what happened instead: add-only access keeps the
     /// event as it is, a deleted event tombstones the workout so it's never
     /// recreated, and an edited one is released. Nil when the event is still as the
     /// app wrote it.
-    private func blockedChange(to entry: LedgerEntry, eventID: String, workoutID: UUID) async throws -> SyncAction? {
+    func blockedChange(to entry: LedgerEntry, eventID: String, workoutID: UUID) async throws -> SyncAction? {
         var entry = entry
         entry.updatedAt = clock.now
         let event: CalendarEvent?
@@ -126,7 +133,7 @@ extension SyncEngine {
             try await ledger.save(entry)
             return .skip(workoutID: workoutID, .tombstoned)
         }
-        guard event.content.matches(entry.written) else {
+        guard entry.state == .adopted ? entry.adoptedEventIsAsWritten(event.content) : event.content.matches(entry.written) else {
             entry.state = .released
             try await ledger.save(entry)
             return .release(workoutID: workoutID, eventID: eventID)

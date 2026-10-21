@@ -13,6 +13,7 @@ extension SyncAction {
         case .relink: "Found in your calendar and linked again, so it isn't added twice"
         case .skip(_, let reason): reason.logDescription
         case .adopt(_, _, _, let decider): decider.logDescription
+        case .removeWorkoutSection: "Removed the workout details from your planned event"
         }
     }
 }
@@ -48,6 +49,7 @@ extension ActivityLogEntry.Undo {
         case .removeCreatedEvent: "Remove this event?"
         case .restoreEvent: "Put the event back as it was?"
         case .recreateEvent: "Add the event back?"
+        case .restorePlannedEvent: "Put your planned event back as it was?"
         }
     }
 
@@ -56,6 +58,7 @@ extension ActivityLogEntry.Undo {
         case .removeCreatedEvent: "Gainsday deletes the event and won't add this workout again."
         case .restoreEvent: "Gainsday restores the event's earlier title, time and notes, and won't change it again."
         case .recreateEvent: "Gainsday adds the event again as it was, and won't change it again."
+        case .restorePlannedEvent: "Gainsday restores the event's original title, time and notes, and won't change it again. The workout can get its own event, or be left out."
         }
     }
 
@@ -64,6 +67,22 @@ extension ActivityLogEntry.Undo {
         case .removeCreatedEvent: "Remove Event"
         case .restoreEvent: "Restore Event"
         case .recreateEvent: "Add Event Back"
+        case .restorePlannedEvent: "Restore Event"
+        }
+    }
+
+    /// The choices for the workout when undoing an update to a planned event, or nil
+    /// when there's nothing to choose.
+    var plannedEventChoices: [ActivityLogEntry.PlannedEventUndoChoice]? {
+        if case .restorePlannedEvent = self { [.separateEvent, .dropWorkout] } else { nil }
+    }
+}
+
+extension ActivityLogEntry.PlannedEventUndoChoice {
+    var confirmationButton: LocalizedStringResource {
+        switch self {
+        case .separateEvent: "Restore and Add Workout Separately"
+        case .dropWorkout: "Restore and Leave Workout Out"
         }
     }
 }
