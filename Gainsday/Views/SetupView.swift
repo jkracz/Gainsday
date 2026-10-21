@@ -9,6 +9,7 @@ struct SetupView: View {
     @State private var selectedCalendarID: String?
     @State private var calendarAccessDenied = false
     @State private var isStarting = false
+    @State private var addsPastWeek = true
     @State private var errorMessage: String?
 
     var body: some View {
@@ -62,6 +63,12 @@ struct SetupView: View {
                 }
 
                 Section {
+                    Toggle("Add the Past 7 Days", isOn: $addsPastWeek)
+                } footer: {
+                    Text("Your workouts from the past 7 days are added too, so your calendar isn't empty. You can add others later.")
+                }
+
+                Section {
                     Button("Start Syncing") {
                         Task { await startSyncing() }
                     }
@@ -69,7 +76,7 @@ struct SetupView: View {
                 } footer: {
                     if let restored = coordinator.settings.syncStartDate {
                         Text("Workouts you started since \(restored, format: .dateTime.day().month().year()) are added, as before.")
-                    } else {
+                    } else if !addsPastWeek {
                         Text("Workouts you start from now on are added. Earlier workouts are left out.")
                     }
                 }
@@ -138,6 +145,7 @@ struct SetupView: View {
         guard let selectedCalendar else { return }
         isStarting = true
         await coordinator.finishSetup(destination: selectedCalendar)
+        if addsPastWeek { await coordinator.backfillPastWeek() }
         isStarting = false
     }
 }

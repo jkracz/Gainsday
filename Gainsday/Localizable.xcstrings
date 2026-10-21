@@ -2,6 +2,52 @@
   "sourceLanguage" : "en",
   "strings" : {
     "%lld on" : {},
+    "Add %lld Events" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Add %lld Event"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Add %lld Events"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Add Past Workouts" : {},
+    "Add the Past 7 Days" : {},
+    "Added %lld events." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Added %lld event."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Added %lld events."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Allow Health Access" : {},
     "Calendar" : {},
     "Choose a Calendar" : {},
@@ -9,6 +55,7 @@
     "Elliptical" : {},
     "Filters" : {},
     "Finished" : {},
+    "From" : {},
     "Full access lets Gainsday see the events it already added, so it never adds a workout twice." : {},
     "Functional Strength Training" : {},
     "Gainsday" : {
@@ -21,12 +68,14 @@
     "Health isn't available on this device." : {},
     "Hiking" : {},
     "If workouts don't show up, open the Health app, tap your profile, then Apps, and check what Gainsday can read." : {},
+    "If you let Gainsday read only the past 30 days of Health data, older workouts can't be added." : {},
     "Last Sync" : {},
     "Minimum Duration" : {},
     "New Events" : {},
     "No Minimum" : {},
     "None" : {},
     "Other" : {},
+    "Preview" : {},
     "Rowing" : {},
     "Running" : {},
     "Set Up Gainsday" : {},
@@ -36,16 +85,41 @@
     "Strength Training" : {},
     "Swimming" : {},
     "Syncing…" : {},
+    "This will create %lld events." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This will create %lld event."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This will create %lld events."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "To" : {},
     "Turn on full calendar access for Gainsday in Settings, then try again." : {},
     "Turning a type on adds workouts you finish from now on." : {},
     "Walking" : {},
     "Workout Types" : {},
     "Workouts Since" : {},
-    "Workouts you started since %@ are added, as before." : {},
+    "Workouts already in your calendar, and those your filters leave out, aren't added again." : {},
     "Workouts you finish appear in this calendar when you open Gainsday." : {},
     "Workouts you start from now on are added. Earlier workouts are left out." : {},
+    "Workouts you started since %@ are added, as before." : {},
     "Yoga" : {},
-    "You can change these later in Settings." : {}
+    "You can change these later in Settings." : {},
+    "Your workouts from the past 7 days are added too, so your calendar isn't empty. You can add others later." : {}
   },
   "version" : "1.0"
 }
