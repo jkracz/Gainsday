@@ -63,12 +63,17 @@ extension SyncEngine {
 
     /// Syncs the workout's copies still in Health as if no plan had matched.
     private func syncSeparately(_ workout: LedgerEntry) async throws -> (actions: [SyncAction], workouts: [Workout]) {
+        try await syncSeparately(try await healthWorkouts(in: workout))
+    }
+
+    /// Syncs workouts as if no plan had matched.
+    func syncSeparately(_ found: [Workout]) async throws -> (actions: [SyncAction], workouts: [Workout]) {
         var settings = await settings.load()
         guard let destination = settings.destinationCalendar else { return ([], []) }
         // The plan the user just took back must not be matched again.
         settings.matchingEnabled = false
         let composer = EventComposer(settings: settings, clock: clock)
-        let workouts = settings.splitBySource(try await healthWorkouts(in: workout)).allowed
+        let workouts = settings.splitBySource(found).allowed
         var actions: [SyncAction] = []
         for cluster in WorkoutCluster.clusters(of: workouts) {
             actions.append(try await sync(cluster, to: destination.id, settings: settings, composer: composer))
