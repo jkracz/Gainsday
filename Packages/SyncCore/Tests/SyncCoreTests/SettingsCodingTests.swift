@@ -15,7 +15,15 @@ struct SettingsCodingTests {
             templateOverrides: [.yoga: EventTemplate(title: "🧘 {duration}", notes: "")],
             footerEnabled: false,
             preferredAccessMode: .addOnly,
-            syncStartDate: Date(timeIntervalSince1970: 1_780_000_000)
+            syncStartDate: Date(timeIntervalSince1970: 1_780_000_000),
+            matchingEnabled: true,
+            matchMode: .createSeparateEvent,
+            searchCalendars: [CalendarReference(id: "home", title: "Home")],
+            matchWindow: 30 * 60,
+            matchKeywords: [.running: ["Parkrun"]],
+            matchModelEnabled: false,
+            holdUnclearMatchesForReview: true,
+            renameMatchedEvents: true
         )
 
         let restored = try JSONDecoder().decode(Settings.self, from: JSONEncoder().encode(settings))
@@ -36,6 +44,14 @@ struct SettingsCodingTests {
         #expect(restored.template == .default)
         #expect(restored.footerEnabled)
         #expect(restored.preferredAccessMode == .full)
+        #expect(restored.matchingEnabled == false)
+        #expect(restored.matchMode == .updatePlannedEvent)
+        #expect(restored.searchCalendars == nil)
+        #expect(restored.matchWindow == 60 * 60)
+        #expect(restored.matchKeywords.isEmpty)
+        #expect(restored.matchModelEnabled)
+        #expect(restored.holdUnclearMatchesForReview == false)
+        #expect(restored.renameMatchedEvents == false)
     }
 
     @Test("An empty backup loads as the defaults")

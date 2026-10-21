@@ -71,6 +71,9 @@ public struct SyncEngine: Sendable {
         if let relinked = try await relinkEarlierEvent(for: workout, in: calendarID, composer: composer) {
             return relinked
         }
+        if let matched = try await matchPlannedEvent(for: workout, destination: calendarID, settings: settings, composer: composer) {
+            return matched
+        }
 
         let draft = EventDraft(calendarID: calendarID, content: composer.content(for: workout), availability: .free)
         let event = try await createEvent(draft)

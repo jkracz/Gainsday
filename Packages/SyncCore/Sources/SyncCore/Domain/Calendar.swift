@@ -84,6 +84,9 @@ public struct CalendarEvent: Identifiable, Hashable, Codable, Sendable {
     public var attendeeCount: Int
     public var isDeclinedByUser: Bool
     public var lastModified: Date?
+    /// Whether the event is an occurrence of a repeating event. Occurrences share one
+    /// external identifier, so the app can't update one of them on its own.
+    public var isRecurring: Bool
 
     public init(
         id: String,
@@ -93,7 +96,8 @@ public struct CalendarEvent: Identifiable, Hashable, Codable, Sendable {
         isAllDay: Bool = false,
         attendeeCount: Int = 0,
         isDeclinedByUser: Bool = false,
-        lastModified: Date? = nil
+        lastModified: Date? = nil,
+        isRecurring: Bool = false
     ) {
         self.id = id
         self.calendarID = calendarID
@@ -103,5 +107,6 @@ public struct CalendarEvent: Identifiable, Hashable, Codable, Sendable {
         self.attendeeCount = attendeeCount
         self.isDeclinedByUser = isDeclinedByUser
         self.lastModified = lastModified
+        self.isRecurring = isRecurring
     }
 }

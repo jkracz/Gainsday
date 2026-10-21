@@ -35,4 +35,7 @@ public protocol CalendarStore: Sendable {
 
     /// Asks calendar accounts to fetch remote changes. Best effort.
     func refreshSources() async
+
+    /// The calendar new events go to by default, or nil if there's none or the app can't tell.
+    func defaultCalendarID() async -> String?
 }

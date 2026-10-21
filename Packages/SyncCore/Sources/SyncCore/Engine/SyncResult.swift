@@ -37,6 +37,9 @@ public enum SyncAction: Hashable, Codable, Sendable {
     /// An event the app wrote earlier, found in the calendar and recorded in the ledger
     /// again instead of being duplicated, e.g. after a reinstall.
     case relink(workoutID: UUID, eventID: String)
+    /// A planned event the user made, updated with the workout and adopted, instead of
+    /// adding a separate event. [v1.1]
+    case adopt(workoutID: UUID, eventID: String, EventContent, decidedBy: MatchDecider)
 }
 
 public struct SyncResult: Hashable, Sendable {
