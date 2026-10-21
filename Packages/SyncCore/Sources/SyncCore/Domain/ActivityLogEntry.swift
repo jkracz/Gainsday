@@ -22,6 +22,9 @@ public struct ActivityLogEntry: Identifiable, Hashable, Codable, Sendable {
     public var undo: Undo?
     /// When the user undid the action, or nil if they haven't.
     public var undoneAt: Date?
+    /// For a workout held for review: when the user matched it or added it as a separate
+    /// event, or nil while it waits. [v1.1]
+    public var reviewedAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -32,7 +35,8 @@ public struct ActivityLogEntry: Identifiable, Hashable, Codable, Sendable {
         workoutStart: Date? = nil,
         eventID: String? = nil,
         undo: Undo? = nil,
-        undoneAt: Date? = nil
+        undoneAt: Date? = nil,
+        reviewedAt: Date? = nil
     ) {
         self.id = id
         self.date = date
@@ -43,6 +47,7 @@ public struct ActivityLogEntry: Identifiable, Hashable, Codable, Sendable {
         self.eventID = eventID
         self.undo = undo
         self.undoneAt = undoneAt
+        self.reviewedAt = reviewedAt
     }
 
     public var workoutID: UUID { action.workoutID }
@@ -60,9 +65,16 @@ extension ActivityLogEntry {
         case restoreEvent(EventContent)
         /// Undo a delete: create the event again as it was, and leave it alone afterwards.
         case recreateEvent(EventDraft)
+        /// Undo a match the user made from the log: put the planned event back as it was
+        /// and add the workout's separate event again. The create entry it was matched
+        /// from can be undone again afterwards. [v1.1]
+        case separateFromPlannedEvent(EventDraft, createEntryID: UUID)
         /// Undo an update to a planned event: put back the event as the user planned it,
         /// and let go of it. The user chooses what happens to the workout. [v1.1]
         case restorePlannedEvent(EventContent)
+        /// Undo settling a workout held for review: remove its separate event, or put its
+        /// planned event back as it was, and let it wait for review again. [v1.1]
+        case returnToReview(heldEntryID: UUID)
     }
 
     /// What happens to the workout once an update to a planned event is undone. [v1.1]

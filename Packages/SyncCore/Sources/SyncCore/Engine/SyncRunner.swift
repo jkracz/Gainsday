@@ -55,6 +55,20 @@ public actor SyncRunner {
         try await enqueue { try await self.engine.undo(entryID: entryID, choice: choice) }.value
     }
 
+    /// Matches an activity log entry's workout to a planned event once any pass already
+    /// running has finished. [v1.1]
+    @discardableResult
+    public func match(entryID: UUID, toEventID eventID: String) async throws -> ActivityLogEntry {
+        try await enqueue { try await self.engine.match(entryID: entryID, toEventID: eventID) }.value
+    }
+
+    /// Adds a workout held for review as its own event once any pass already running
+    /// has finished. [v1.1]
+    @discardableResult
+    public func addSeparateEvent(entryID: UUID) async throws -> ActivityLogEntry {
+        try await enqueue { try await self.engine.addSeparateEvent(entryID: entryID) }.value
+    }
+
     /// Starts `pass` once every pass queued before it has finished.
     private func enqueue<Value: Sendable>(_ pass: @escaping @Sendable () async throws -> Value) -> Task<Value, any Error> {
         let previous = queueTail
