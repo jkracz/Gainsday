@@ -12,8 +12,6 @@ struct CalendarAccessSection: View {
                 Label("Update events when Health replaces a workout", systemImage: "arrow.triangle.2.circlepath")
                 Label("Remove events when you delete a workout in Health", systemImage: "trash")
             }
-        } header: {
-            Text("Calendar")
         } footer: {
             if coordinator.hasFullCalendarAccess {
                 Text("Events you edit or delete yourself are left alone.")
