@@ -28,7 +28,7 @@ extension SyncCoordinator {
     }
 
     /// Asks Health to wake the app for new workouts. Fails quietly until Health
-    /// access has been asked for, so setup calls it again.
+    /// access has been asked for, so setup's Health step calls it again.
     func enableBackgroundDelivery() async {
         try? await health.enableBackgroundDelivery()
     }

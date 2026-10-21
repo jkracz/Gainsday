@@ -30,11 +30,13 @@ final class SetupModel {
         }
     }
 
-    /// Shows Health's permission sheet. Returns false if it couldn't be shown.
+    /// Shows Health's permission sheet, then turns on background delivery, which
+    /// fails until access has been asked for. Returns false if it couldn't be shown.
     func requestHealthAccess(_ coordinator: SyncCoordinator) async -> Bool {
         do {
             try await coordinator.health.requestAuthorization()
             healthRequested = true
+            await coordinator.enableBackgroundDelivery()
             return true
         } catch {
             errorMessage = error.localizedDescription

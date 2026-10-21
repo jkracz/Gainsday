@@ -97,7 +97,6 @@ final class SyncCoordinator {
         UserDefaults.standard.set(true, forKey: Self.setupKey)
         hasFinishedSetupOnThisDevice = true
         await notifier.requestAuthorization()
-        await enableBackgroundDelivery()
         await sync()
     }
 
