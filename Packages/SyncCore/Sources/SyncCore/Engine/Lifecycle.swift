@@ -6,7 +6,9 @@ extension SyncEngine {
     /// HealthKit workouts are immutable, so an edit, merge or re-import arrives as a
     /// delete plus an add. When an added workout of the same type overlaps a deleted
     /// one in the same pass, it replaces it: the existing event is updated in place.
-    /// A replacement the user's filters leave out keeps the event as it is.
+    /// A replacement the user's filters leave out keeps the event as it is. When a
+    /// cluster loses the member whose values the event shows, another copy still in
+    /// Health takes over and the event is rewritten with its values.
     ///
     /// Before touching an owned event, the engine compares it with what it last wrote.
     /// If the user edited it, the event is released and left alone from then on. If
@@ -30,6 +32,12 @@ extension SyncEngine {
             if !survivors.isEmpty {
                 // Another copy of the workout is still in Health, so the event stays.
                 var entry = entry
+                if entry.workoutID == deletedID, let successor = try await successor(in: entry, among: survivors, settings: settings) {
+                    entry.memberIDs.remove(deletedID)
+                    entry.takeIdentity(from: successor)
+                    actions.append(try await rewrite(entry, for: successor, composer: composer))
+                    continue
+                }
                 entry.remove(deletedID, keeping: survivors)
                 entry.updatedAt = clock.now
                 try await ledger.save(entry)
@@ -124,6 +132,13 @@ extension SyncEngine {
             return .release(workoutID: workoutID, eventID: eventID)
         }
         return nil
+    }
+
+    /// The surviving cluster member whose values the event should show now, if any
+    /// is still in Health and allowed.
+    private func successor(in entry: LedgerEntry, among survivors: Set<UUID>, settings: Settings) async throws -> Workout? {
+        let remaining = try await healthWorkouts(in: entry).filter { survivors.contains($0.id) }
+        return settings.splitBySource(remaining).allowed.min(by: Workout.isPreferred)
     }
 
     /// The first added workout of the same type that overlaps the entry's workout

@@ -96,6 +96,48 @@ struct ClusteringTests {
         #expect(entry.memberIDs == [watchRun.id, stravaRun.id])
     }
 
+    @Test("Deleting the Watch copy in Health rewrites the event with the Strava copy that's left")
+    func deletingPreferredCopyRewritesEvent() async throws {
+        let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let stravaRun = SyncHarness.stravaCopy(of: watchRun)
+        let harness = SyncHarness(workouts: [watchRun, stravaRun])
+        let first = try await harness.engine.run(.changes(since: nil))
+        let event = try #require(await harness.calendar.allEvents.first)
+
+        await harness.workouts.delete(watchRun.id)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        let updated = try #require(await harness.calendar.allEvents.first)
+        #expect(await harness.calendar.allEvents.count == 1)
+        #expect(updated.id == event.id)
+        #expect(updated.content.start == stravaRun.start)
+        #expect(updated.content.notes?.contains("3.18 mi") == true)
+        #expect(updated.content.notes?.hasSuffix(stravaRun.shortID) == true)
+        #expect(second.actions == [.update(workoutID: stravaRun.id, eventID: event.id, updated.content)])
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(entry.workoutID == stravaRun.id)
+        #expect(entry.memberIDs == [stravaRun.id])
+        #expect(entry.written == updated.content)
+    }
+
+    @Test("Deleting the Strava copy in Health leaves the Watch's event as it is")
+    func deletingOtherCopyKeepsEvent() async throws {
+        let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let stravaRun = SyncHarness.stravaCopy(of: watchRun)
+        let harness = SyncHarness(workouts: [watchRun, stravaRun])
+        let first = try await harness.engine.run(.changes(since: nil))
+        let event = try #require(await harness.calendar.allEvents.first)
+
+        await harness.workouts.delete(stravaRun.id)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions.isEmpty)
+        #expect(await harness.calendar.allEvents == [event])
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(entry.workoutID == watchRun.id)
+        #expect(entry.memberIDs == [watchRun.id])
+    }
+
     @Test("With a Strava-only allowlist, the Watch copy is ignored and the event shows Strava's values")
     func stravaOnlyAllowlistIgnoresWatch() async throws {
         let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
