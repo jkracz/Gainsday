@@ -54,7 +54,7 @@ final class SyncCoordinator {
             calendar: calendar,
             ledger: ledger,
             settings: settingsStore,
-            judge: UnavailableMatchJudge(),
+            judge: OnDeviceMatchJudge(),
             clock: clock,
             notifier: notifier,
             activityLog: activityLogStore

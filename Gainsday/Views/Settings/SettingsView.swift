@@ -28,6 +28,8 @@ struct SettingsView: View {
             } header: {
                 Text("Events")
             }
+
+            UnclearMatchSettingsSection()
         }
         .navigationTitle("Settings")
     }
