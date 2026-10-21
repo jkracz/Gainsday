@@ -96,6 +96,111 @@ struct AdoptedLifecycleTests {
     }
 }
 
+@Suite("Undoing an update to a planned event")
+struct AdoptedUndoTests {
+    @Test("The update is logged with an Undo that puts the plan back as it was")
+    func adoptionIsUndoable() async throws {
+        let (harness, _, planned, _) = try await SyncHarness.adopting()
+
+        let entry = try #require(await harness.activityLog.entries.first)
+        #expect(entry.undo == .restorePlannedEvent(planned.content))
+        #expect(entry.canUndo)
+    }
+
+    @Test("Undo restores the plan exactly, and the workout gets its own event that later passes keep")
+    func undoWithSeparateEvent() async throws {
+        let (harness, workout, planned, _) = try await SyncHarness.adopting()
+        var renamed = try #require(await harness.calendar.allEvents.first)
+        renamed.content.title = "Long run"
+        await harness.calendar.put(renamed)
+        let entry = try #require(await harness.activityLog.entries.first)
+
+        let undone = try await harness.engine.undo(entryID: entry.id, choice: .separateEvent)
+
+        #expect(undone.undoneAt == SyncHarness.now)
+        let events = await harness.calendar.allEvents
+        #expect(events.count == 2)
+        #expect(events.first { $0.id == planned.id }?.content == planned.content)
+        let separate = try #require(events.first { $0.id != planned.id })
+        #expect(separate.calendarID == SyncHarness.destination.id)
+        #expect(separate.content.start == workout.start)
+        #expect(separate.content.end == workout.end)
+        #expect(await harness.ledger.allEntries.map(\.state) == [.owned])
+        #expect(await harness.ledger.allEntries.first?.eventExternalIdentifier == separate.id)
+        let log = await harness.activityLog.entries
+        #expect(log.map(\.id) == [log[0].id, entry.id])
+        #expect(log.first?.undo == .removeCreatedEvent)
+        #expect(log.last == undone)
+
+        // Even with the anchor lost, the plan isn't matched again.
+        let next = try await harness.engine.run(.changes(since: nil))
+        #expect(next.actions == [.skip(workoutID: workout.id, .alreadySynced)])
+        #expect(await harness.calendar.allEvents.count == 2)
+        #expect(await harness.calendar.allEvents.first { $0.id == planned.id }?.content == planned.content)
+    }
+
+    @Test("Undo restores the plan exactly and drops the workout, so later passes leave it out")
+    func undoDroppingWorkout() async throws {
+        let (harness, workout, planned, _) = try await SyncHarness.adopting()
+        let entry = try #require(await harness.activityLog.entries.first)
+
+        try await harness.engine.undo(entryID: entry.id, choice: .dropWorkout)
+
+        #expect(await harness.calendar.allEvents.map(\.content) == [planned.content])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.tombstoned])
+        #expect(await harness.ledger.allEntries.first?.covers(workout.id) == true)
+
+        let next = try await harness.engine.run(.changes(since: nil))
+        #expect(next.actions == [.skip(workoutID: workout.id, .tombstoned)])
+        #expect(await harness.calendar.allEvents.map(\.content) == [planned.content])
+    }
+
+    @Test("Undo still restores the plan after the workout was deleted in Health")
+    func undoAfterWorkoutDeleted() async throws {
+        let (harness, workout, planned, anchor) = try await SyncHarness.adopting()
+        let entry = try #require(await harness.activityLog.entries.first)
+        await harness.workouts.delete(workout.id)
+        _ = try await harness.engine.run(.changes(since: anchor))
+        #expect(await harness.activityLog.entries.first?.undo == nil)
+
+        try await harness.engine.undo(entryID: entry.id, choice: .separateEvent)
+
+        #expect(await harness.calendar.allEvents.map(\.content) == [planned.content])
+        #expect(await harness.ledger.allEntries.isEmpty)
+    }
+
+    @Test("Undo after the workout was replaced in Health restores the plan and gives the replacement its own event")
+    func undoAfterReplacement() async throws {
+        let (harness, workout, planned, anchor) = try await SyncHarness.adopting()
+        let entry = try #require(await harness.activityLog.entries.first)
+        let replacement = SyncHarness.run(from: (10, 15), to: (11, 15))
+        await harness.workouts.delete(workout.id)
+        await harness.workouts.add(replacement)
+        _ = try await harness.engine.run(.changes(since: anchor))
+
+        try await harness.engine.undo(entryID: entry.id, choice: .separateEvent)
+
+        let events = await harness.calendar.allEvents
+        #expect(events.count == 2)
+        #expect(events.first { $0.id == planned.id }?.content == planned.content)
+        #expect(events.first { $0.id != planned.id }?.content.start == replacement.start)
+        let ledger = await harness.ledger.allEntries
+        #expect(ledger.map(\.state) == [.owned])
+        #expect(ledger.first?.workoutID == replacement.id)
+    }
+
+    @Test("Undoing an update without saying what happens to the workout is refused")
+    func undoNeedsChoice() async throws {
+        let (harness, _, _, _) = try await SyncHarness.adopting()
+        let entry = try #require(await harness.activityLog.entries.first)
+
+        await #expect(throws: UndoError.choiceRequired) {
+            try await harness.engine.undo(entryID: entry.id)
+        }
+        #expect(await harness.activityLog.entries.first?.canUndo == true)
+    }
+}
+
 extension SyncHarness {
     /// A harness whose run has adopted the user's planned "Run", and the anchor after that pass.
     static func adopting() async throws -> (SyncHarness, Workout, CalendarEvent, WorkoutAnchor?) {
