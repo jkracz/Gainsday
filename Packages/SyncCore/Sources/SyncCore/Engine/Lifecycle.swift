@@ -13,7 +13,8 @@ extension SyncEngine {
     /// Before touching an owned event, the engine compares it with what it last wrote.
     /// If the user edited it, the event is released and left alone from then on. If
     /// the user deleted it, the workout is tombstoned so it's never recreated.
-    /// Released and tombstoned entries are left alone. Adopted events keep their time
+    /// Released and tombstoned entries keep their event as it is, but follow a
+    /// replacement so it isn't synced as a new workout. Adopted events keep their time
     /// and lose only the workout section (see `AdoptedLifecycle.swift`).
     ///
     /// Returns the actions taken and the added workouts that still need syncing.
@@ -27,7 +28,13 @@ extension SyncEngine {
         for deletedID in changes.deletedIDs {
             // Collapse iCloud duplicates and fix a changed identifier first, so an event
             // that's still there isn't mistaken for one the user deleted.
-            guard let resolved = try await resolvedEntry(forWorkout: deletedID), [.owned, .adopted].contains(resolved.state) else { continue }
+            guard let resolved = try await resolvedEntry(forWorkout: deletedID) else { continue }
+            guard [.owned, .adopted].contains(resolved.state) else {
+                if let action = try await carryOver(resolved, from: deletedID, deletedIDs: changes.deletedIDs, remaining: &remaining) {
+                    actions.append(action)
+                }
+                continue
+            }
             let entry = try await correctExternalIdentifier(of: resolved)
             let survivors = entry.memberIDs.subtracting(changes.deletedIDs)
             if !survivors.isEmpty {
@@ -62,6 +69,31 @@ extension SyncEngine {
             }
         }
         return (actions, remaining)
+    }
+
+    /// Moves a released or tombstoned entry on to the workout that replaced its deleted
+    /// one, so the replacement is still left alone rather than synced as a new workout.
+    /// The entry's event, if it has one, isn't touched. Returns the replacement's skip.
+    private func carryOver(
+        _ entry: LedgerEntry,
+        from deletedID: UUID,
+        deletedIDs: [UUID],
+        remaining: inout [Workout]
+    ) async throws -> SyncAction? {
+        var entry = entry
+        let survivors = entry.memberIDs.subtracting(deletedIDs)
+        guard survivors.isEmpty else {
+            entry.remove(deletedID, keeping: survivors)
+            entry.updatedAt = clock.now
+            try await ledger.save(entry)
+            return nil
+        }
+        guard let index = try await replacementIndex(for: entry, in: remaining) else { return nil }
+        let replacement = remaining.remove(at: index)
+        entry.replace(deletedID, with: replacement)
+        entry.updatedAt = clock.now
+        try await ledger.save(entry)
+        return .skip(workoutID: replacement.id, entry.state == .tombstoned ? .tombstoned : .alreadySynced)
     }
 
     /// Deletes, updates, releases or tombstones one owned entry's event after its
