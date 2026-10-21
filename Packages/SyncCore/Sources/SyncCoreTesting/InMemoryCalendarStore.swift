@@ -9,6 +9,8 @@ public actor InMemoryCalendarStore: CalendarStore {
     private var mode: AccessMode
     private let clock: any Clock
     public private(set) var refreshCount = 0
+    /// Every calendar whose events have been read, so tests can prove a calendar was never looked at.
+    public private(set) var readCalendarIDs: Set<String> = []
     private var defaultID: String?
 
     public init(calendars: [CalendarInfo] = [], events: [CalendarEvent] = [], accessMode: AccessMode = .full, clock: any Clock) {
@@ -73,6 +75,7 @@ public actor InMemoryCalendarStore: CalendarStore {
 
     public func events(in interval: DateInterval, calendarIDs: Set<String>) async throws -> [CalendarEvent] {
         try requireFullAccess()
+        readCalendarIDs.formUnion(calendarIDs)
         return allEvents.filter { event in
             calendarIDs.contains(event.calendarID)
                 && event.content.start < interval.end

@@ -37,7 +37,7 @@ public struct Settings: Hashable, Codable, Sendable {
     /// [v1.1] Whether workouts are matched to events the user planned. Off until the user opts in.
     public var matchingEnabled: Bool
     public var matchMode: MatchMode
-    /// [v1.1] The calendars searched for planned events. Nil means the destination plus the default calendar.
+    /// [v1.1] The calendars searched for planned events. Nil or empty means the destination plus the default calendar.
     public var searchCalendars: [CalendarReference]?
     /// [v1.1] How far a planned event's start may be from the workout's start, when they don't overlap.
     public var matchWindow: TimeInterval

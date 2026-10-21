@@ -25,11 +25,10 @@ struct SettingsView: View {
 
             Section {
                 TemplateEditorLink()
+                MatchingSettingsLink()
             } header: {
                 Text("Events")
             }
-
-            UnclearMatchSettingsSection()
         }
         .navigationTitle("Settings")
     }
