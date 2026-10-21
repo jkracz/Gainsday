@@ -1,7 +1,7 @@
 import Foundation
 
-/// Runs sync passes one at a time, so a background wake, an app open and a backfill
-/// that overlap never read the same Health changes twice and create no duplicates.
+/// Runs sync passes one at a time, so a background wake, an app open, a backfill and
+/// an Undo that overlap never read the same Health changes twice and create no duplicates.
 public actor SyncRunner {
     private let engine: SyncEngine
     private let anchors: any WorkoutAnchorStore
@@ -42,8 +42,14 @@ public actor SyncRunner {
         try await enqueue { try await self.engine.run(.backfill(interval, mode)) }.value
     }
 
+    /// Undoes an activity log entry once any pass already running has finished.
+    @discardableResult
+    public func undo(entryID: UUID) async throws -> ActivityLogEntry {
+        try await enqueue { try await self.engine.undo(entryID: entryID) }.value
+    }
+
     /// Starts `pass` once every pass queued before it has finished.
-    private func enqueue(_ pass: @escaping @Sendable () async throws -> SyncResult) -> Task<SyncResult, any Error> {
+    private func enqueue<Value: Sendable>(_ pass: @escaping @Sendable () async throws -> Value) -> Task<Value, any Error> {
         let previous = queueTail
         let task = Task {
             await previous?.value

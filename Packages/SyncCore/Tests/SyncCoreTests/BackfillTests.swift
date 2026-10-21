@@ -56,6 +56,35 @@ struct BackfillTests {
         #expect(entry.state == .owned)
     }
 
+    @Test("A preview adds nothing to the activity log")
+    func previewIsNotLogged() async throws {
+        let harness = SyncHarness(workouts: [SyncHarness.run(minutesAgo: 3 * 24 * 60)])
+
+        _ = try await harness.engine.run(.backfill(SyncHarness.lastDays(14), .preview))
+
+        #expect(await harness.activityLog.entries.isEmpty)
+    }
+
+    @Test("A commit logs the events it created, newest first, and each one can be undone")
+    func commitIsLogged() async throws {
+        let older = SyncHarness.run(minutesAgo: 10 * 24 * 60)
+        let recent = SyncHarness.run(minutesAgo: 2 * 24 * 60)
+        let harness = SyncHarness(workouts: [recent, older])
+
+        let result = try await harness.engine.run(.backfill(SyncHarness.lastDays(14), .commit))
+
+        let entries = await harness.activityLog.entries
+        #expect(entries.map(\.action) == result.actions.reversed())
+        #expect(entries.map(\.workoutID) == [recent.id, older.id])
+        #expect(entries.allSatisfy { $0.canUndo })
+        let event = try #require(await harness.calendar.allEvents.first { $0.content.start == recent.start })
+        #expect(entries.first?.eventID == event.id)
+
+        _ = try await harness.engine.undo(entryID: try #require(entries.first).id)
+
+        #expect(await harness.calendar.allEvents.map(\.content.start) == [older.start])
+    }
+
     @Test("A commit moves the sync start date back to the start of the range, and a preview leaves it alone")
     func commitMovesSyncStartDateBack() async throws {
         let harness = SyncHarness()

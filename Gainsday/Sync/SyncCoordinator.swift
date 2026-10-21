@@ -23,11 +23,16 @@ final class SyncCoordinator {
     var isWaitingForUnlock = false
     var lastPass: Pass?
     var lastError: String?
+    /// The activity log, newest first.
+    private(set) var activityLog: [ActivityLogEntry] = []
+    /// Add-only access greys out features that need to read or change events.
+    private(set) var calendarAccess = AccessMode.none
 
     let health: HealthKitWorkoutSource
     let calendar: EventKitCalendarStore
     private let settingsStore: CloudSettingsStore
     let cloudImport = CloudImportMonitor()
+    private let activityLogStore: FileActivityLogStore
     let clock = SystemClock()
     private let notifier = LocalNotifier()
     let engine: SyncEngine
@@ -43,6 +48,7 @@ final class SyncCoordinator {
         health = HealthKitWorkoutSource()
         calendar = EventKitCalendarStore()
         settingsStore = CloudSettingsStore()
+        activityLogStore = FileActivityLogStore()
         engine = SyncEngine(
             workouts: health,
             calendar: calendar,
@@ -50,7 +56,8 @@ final class SyncCoordinator {
             settings: settingsStore,
             judge: UnavailableMatchJudge(),
             clock: clock,
-            notifier: notifier
+            notifier: notifier,
+            activityLog: activityLogStore
         )
         runner = SyncRunner(engine: engine, anchors: AnchorStore())
         UNUserNotificationCenter.current().delegate = notifier
@@ -58,9 +65,11 @@ final class SyncCoordinator {
 
     func load() async {
         settings = await settingsStore.load()
+        calendarAccess = await calendar.accessMode()
+        await refreshActivityLog()
         // The setup flag can come back from a device backup, and access can be revoked
         // in Settings. Either way, setup has to ask again before syncing can work.
-        if hasFinishedSetupOnThisDevice, await calendar.accessMode() == .none {
+        if hasFinishedSetupOnThisDevice, calendarAccess == .none {
             await engine.report(.calendarAccessRevoked)
             forgetSetup()
         }
@@ -118,6 +127,19 @@ final class SyncCoordinator {
         } catch {
             lastError = error.localizedDescription
         }
+        await refreshActivityLog()
+    }
+
+    /// Undoes an activity log entry. It counts as a pass, so it never runs alongside one.
+    func undo(_ entry: ActivityLogEntry) async throws {
+        runningPasses += 1
+        defer { runningPasses -= 1 }
+        try await runner.undo(entryID: entry.id)
+        await refreshActivityLog()
+    }
+
+    func refreshActivityLog() async {
+        activityLog = (try? await activityLogStore.load()) ?? []
     }
 
     private func forgetSetup() {

@@ -70,6 +70,30 @@ struct SyncRunnerTests {
         #expect(backfillResult.actions == [.skip(workoutID: workout.id, .alreadySynced)])
     }
 
+    @Test("An undo waits for a running pass, then sticks")
+    func undoWaitsForRunningPass() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        _ = try await harness.engine.run(.changes(since: nil))
+        let entry = try #require(await harness.activityLog.entries.first)
+        let health = GatedWorkoutSource(harness.workouts)
+        let runner = harness.runner(reading: health)
+
+        async let background = runner.syncChanges()
+        await health.waitForReaders(1)
+        async let undo = runner.undo(entryID: entry.id)
+        try await Task.sleep(for: .milliseconds(50))
+        let eventsDuringPass = await harness.calendar.allEvents
+        await health.open()
+        _ = try await (background, undo)
+
+        let events = await harness.calendar.allEvents
+        let states = await harness.ledger.allEntries.map(\.state)
+        #expect(eventsDuringPass.count == 1)
+        #expect(events.isEmpty)
+        #expect(states == [.tombstoned])
+    }
+
     @Test("A pass while the phone is locked keeps the anchor and notifies nothing, so the pass after unlock syncs the workout")
     func lockedPassIsFinishedAfterUnlock() async throws {
         let workout = SyncHarness.run()

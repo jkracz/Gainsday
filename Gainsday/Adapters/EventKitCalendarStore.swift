@@ -12,6 +12,12 @@ actor EventKitCalendarStore: CalendarStore {
         try await store.requestFullAccessToEvents()
     }
 
+    /// Shows the add-only access prompt if the user hasn't answered it yet. With this
+    /// access the app can add events but can't see any, not even its own.
+    func requestAddOnlyAccess() async throws -> Bool {
+        try await store.requestWriteOnlyAccessToEvents()
+    }
+
     /// Fires when calendars or events change, in this app or elsewhere.
     nonisolated func changes() -> AsyncStream<Void> {
         NotificationCenter.default.signals(named: .EKEventStoreChanged)
@@ -101,7 +107,7 @@ actor EventKitCalendarStore: CalendarStore {
         event.notes = content.notes
     }
 
-    private static func calendarInfo(_ calendar: EKCalendar) -> CalendarInfo {
+    static func calendarInfo(_ calendar: EKCalendar) -> CalendarInfo {
         CalendarInfo(
             id: calendar.calendarIdentifier,
             title: calendar.title,

@@ -8,7 +8,7 @@ extension SyncEngine {
     ///
     /// A preview runs the exact same pass against copies of the calendar and ledger that
     /// keep their writes to themselves. It writes nothing, and a commit straight after it
-    /// takes the actions it listed.
+    /// takes the actions it listed. Only a commit is recorded in the activity log.
     func backfill(_ interval: DateInterval, mode: BackfillMode) async throws -> SyncResult {
         var settings = await settings.load()
         guard let destination = settings.destinationCalendar, let syncStartDate = settings.syncStartDate else {
@@ -31,7 +31,13 @@ extension SyncEngine {
             }
         }
         let composer = EventComposer(settings: settings, clock: clock)
-        return SyncResult(actions: try await engine.syncAdded(found, to: destination.id, settings: settings, composer: composer))
+        let result = SyncResult(actions: try await engine.syncAdded(found, to: destination.id, settings: settings, composer: composer))
+        switch mode {
+        case .preview:
+            return result
+        case .commit:
+            return await ActivityRecorder(engine: self, added: found).record(result)
+        }
     }
 
     /// Syncs workouts Health added, oldest first.
@@ -115,6 +121,10 @@ private actor DryRunLedger: Ledger {
     func entries(in interval: DateInterval) async throws -> [LedgerEntry] {
         overlaid(try await base.entries(in: interval))
             .filter { $0.workoutStart < interval.end && $0.workoutEnd > interval.start }
+    }
+
+    func entriesNeedingLinking() async throws -> [LedgerEntry] {
+        overlaid(try await base.entriesNeedingLinking()).filter(\.needsLinking)
     }
 
     func save(_ entry: LedgerEntry) async throws {
