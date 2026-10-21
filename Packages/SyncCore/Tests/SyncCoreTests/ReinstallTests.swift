@@ -101,6 +101,94 @@ struct ReinstallTests {
         #expect(result.actions.count == 1)
         #expect(result.actions.allSatisfy { if case .create = $0 { true } else { false } })
     }
+
+    @Test("With the footer off, a workout the restored ledger knows is skipped, not duplicated")
+    func footerOffWithLedgerCreatesNoDuplicate() async throws {
+        let workout = SyncHarness.run()
+        var settings = SyncHarness.defaultSettings
+        settings.footerEnabled = false
+        let harness = SyncHarness(workouts: [workout], settings: settings)
+        var existing = try await SyncHarness.eventLeftByEarlierInstall(for: workout, footer: false)
+        existing.content.title = "Easy run"
+        await harness.calendar.put(existing)
+        try await harness.ledger.save(SyncHarness.ownedEntry(for: workout, eventID: existing.id))
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        #expect(result.actions == [.skip(workoutID: workout.id, .alreadySynced)])
+        #expect(await harness.calendar.allEvents == [existing])
+        #expect(await harness.ledger.allEntries.count == 1)
+    }
+
+    @Test("Duplicate ledger entries from an iCloud merge collapse to a live entry over a newer tombstone, whichever arrived first")
+    func duplicatesPreferLiveEntry() async throws {
+        let workout = SyncHarness.run()
+        let owned = SyncHarness.ownedEntry(for: workout, eventID: "event", updatedAt: SyncHarness.now.addingTimeInterval(-7200))
+        var tombstone = SyncHarness.ownedEntry(for: workout, eventID: "event", updatedAt: SyncHarness.now.addingTimeInterval(-3600))
+        tombstone.state = .tombstoned
+
+        for arrivalOrder in [[owned, tombstone], [tombstone, owned]] {
+            let harness = SyncHarness(workouts: [workout])
+            await harness.calendar.put(try await SyncHarness.eventLeftByEarlierInstall(for: workout, id: "event"))
+            for (index, entry) in arrivalOrder.enumerated() {
+                var arrived = entry
+                arrived.createdAt = SyncHarness.now.addingTimeInterval(Double(index))
+                try await harness.ledger.save(arrived)
+            }
+
+            let result = try await harness.engine.run(.changes(since: nil))
+
+            #expect(result.actions == [.skip(workoutID: workout.id, .alreadySynced)])
+            #expect(await harness.ledger.allEntries.map(\.id) == [owned.id])
+            #expect(await harness.calendar.allEvents.count == 1)
+        }
+    }
+
+    @Test("Of duplicate live entries, the most recently updated one survives, and ties break the same way every time")
+    func duplicatesPreferMostRecentlyUpdated() async throws {
+        let workout = SyncHarness.run()
+        let older = SyncHarness.ownedEntry(for: workout, eventID: "event", updatedAt: SyncHarness.now.addingTimeInterval(-7200))
+        let newer = SyncHarness.ownedEntry(for: workout, eventID: "event", updatedAt: SyncHarness.now.addingTimeInterval(-3600))
+        let newerTwin = SyncHarness.ownedEntry(for: workout, eventID: "event", updatedAt: newer.updatedAt)
+
+        var survivors: [UUID] = []
+        for arrivalOrder in [[older, newer, newerTwin], [newerTwin, older, newer], [newer, newerTwin, older]] {
+            let harness = SyncHarness(workouts: [workout])
+            await harness.calendar.put(try await SyncHarness.eventLeftByEarlierInstall(for: workout, id: "event"))
+            for (index, entry) in arrivalOrder.enumerated() {
+                var arrived = entry
+                arrived.createdAt = SyncHarness.now.addingTimeInterval(Double(index))
+                try await harness.ledger.save(arrived)
+            }
+
+            _ = try await harness.engine.run(.changes(since: nil))
+
+            let remaining = await harness.ledger.allEntries
+            #expect(remaining.count == 1)
+            survivors += remaining.map(\.id)
+        }
+        #expect(Set(survivors).count == 1)
+        #expect(survivors.first != older.id)
+    }
+
+    @Test("A collapsed duplicate's cluster members stay covered by the surviving entry")
+    func duplicatesKeepEveryMember() async throws {
+        let workout = SyncHarness.run()
+        let strava = UUID()
+        let survivor = SyncHarness.ownedEntry(for: workout, eventID: "event", updatedAt: SyncHarness.now)
+        var loser = SyncHarness.ownedEntry(for: workout, eventID: "event", updatedAt: SyncHarness.now.addingTimeInterval(-3600))
+        loser.memberIDs.insert(strava)
+        let harness = SyncHarness(workouts: [workout])
+        await harness.calendar.put(try await SyncHarness.eventLeftByEarlierInstall(for: workout, id: "event"))
+        try await harness.ledger.save(survivor)
+        try await harness.ledger.save(loser)
+
+        _ = try await harness.engine.run(.changes(since: nil))
+
+        let remaining = await harness.ledger.allEntries
+        #expect(remaining.map(\.id) == [survivor.id])
+        #expect(remaining.first?.memberIDs == [workout.id, strava])
+    }
 }
 
 extension SyncHarness {

@@ -56,11 +56,8 @@ public struct SyncEngine: Sendable {
         guard workout.start >= syncStartDate else {
             return .skip(workoutID: workout.id, .beforeSyncStartDate)
         }
-        let entries = try await ledger.entries(forWorkout: workout.id)
-        if !entries.isEmpty {
-            // Duplicate entries can arrive from iCloud; any live one means the workout is synced.
-            let isTombstoned = entries.allSatisfy { $0.state == .tombstoned }
-            return .skip(workoutID: workout.id, isTombstoned ? .tombstoned : .alreadySynced)
+        if let entry = try await resolvedEntry(forWorkout: workout.id) {
+            return .skip(workoutID: workout.id, entry.state == .tombstoned ? .tombstoned : .alreadySynced)
         }
         if let relinked = try await relinkEarlierEvent(for: workout, in: calendarID, composer: composer) {
             return relinked
