@@ -1,6 +1,7 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ · Sample" : {},
     "%lld on" : {},
     "Add %lld Events" : {
       "localizations" : {
@@ -48,11 +49,16 @@
         }
       }
     },
+    "Added by Gainsday. It isn't part of your template." : {},
     "Allow Health Access" : {},
     "Calendar" : {},
+    "Calendar Access Is Off" : {},
     "Choose a Calendar" : {},
     "Cycling" : {},
+    "Detailed" : {},
     "Elliptical" : {},
+    "Event Template" : {},
+    "Events" : {},
     "Filters" : {},
     "Finished" : {},
     "From" : {},
@@ -61,30 +67,42 @@
     "Gainsday" : {
       "shouldTranslate" : false
     },
+    "Gainsday adds the last line itself, so it can recognise its events. It isn't part of your template." : {},
+    "Gainsday can't add your workouts to your calendar. Turn calendar access back on in Settings." : {},
+    "Gainsday can't read your workouts. Turn Health access back on in Settings." : {},
     "Gainsday reads your workouts. It never writes to Health." : {},
     "HIIT" : {},
     "Health" : {},
+    "Health Access Is Off" : {},
     "Health isn't available on this device, so Gainsday can't read your workouts." : {},
     "Health isn't available on this device." : {},
     "Hiking" : {},
     "If workouts don't show up, open the Health app, tap your profile, then Apps, and check what Gainsday can read." : {},
     "If you let Gainsday read only the past 30 days of Health data, older workouts can't be added." : {},
     "Last Sync" : {},
+    "Minimal" : {},
     "Minimum Duration" : {},
     "New Events" : {},
     "No Minimum" : {},
     "None" : {},
+    "Notes" : {},
     "Other" : {},
+    "Placeholders" : {},
     "Preview" : {},
+    "Reset to Default" : {},
     "Rowing" : {},
+    "Runner" : {},
     "Running" : {},
     "Set Up Gainsday" : {},
     "Settings" : {},
     "Shorter workouts aren't added to your calendar." : {},
+    "Start From" : {},
     "Start Syncing" : {},
     "Strength Training" : {},
     "Swimming" : {},
     "Syncing…" : {},
+    "Tap a placeholder to add it at the cursor. Notes lines and title parts with a missing value are left out." : {},
+    "The calendar Gainsday adds workouts to was deleted. Open Gainsday to choose another." : {},
     "This will create %lld events." : {
       "localizations" : {
         "en" : {
@@ -107,10 +125,13 @@
         }
       }
     },
+    "Title" : {},
     "To" : {},
     "Turn on full calendar access for Gainsday in Settings, then try again." : {},
     "Turning a type on adds workouts you finish from now on." : {},
     "Walking" : {},
+    "Workout" : {},
+    "Workout Calendar Is Gone" : {},
     "Workout Types" : {},
     "Workouts Since" : {},
     "Workouts already in your calendar, and those your filters leave out, aren't added again." : {},

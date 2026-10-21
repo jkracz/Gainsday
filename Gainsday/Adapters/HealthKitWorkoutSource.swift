@@ -40,7 +40,7 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
             predicates: [.workout()],
             anchor: anchor.flatMap(Self.queryAnchor)
         )
-        let result = try await descriptor.result(for: store)
+        let result = try await Self.mappingAccessErrors { try await descriptor.result(for: store) }
         return WorkoutChanges(
             added: result.addedSamples.map(Self.workout),
             deletedIDs: result.deletedObjects.map { $0.uuid },
@@ -69,6 +69,16 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
 
     private func requireHealthData() throws {
         guard isHealthDataAvailable else { throw Unavailable() }
+    }
+
+    /// Reports HealthKit's authorization errors as `WorkoutSourceError.accessDenied`.
+    /// HealthKit usually hides denied read access by returning no results instead.
+    private static func mappingAccessErrors<T>(_ read: () async throws -> T) async throws -> T {
+        do {
+            return try await read()
+        } catch let error as HKError where [.errorAuthorizationDenied, .errorAuthorizationNotDetermined].contains(error.code) {
+            throw WorkoutSourceError.accessDenied
+        }
     }
 
     private static func workout(_ sample: HKWorkout) -> Workout {

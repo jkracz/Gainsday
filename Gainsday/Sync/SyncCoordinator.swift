@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SyncCore
+import UserNotifications
 
 /// Wires the sync engine to the real adapters, runs passes and keeps the state the UI shows.
 @Observable
@@ -26,6 +27,7 @@ final class SyncCoordinator {
     private let anchors: AnchorStore
     let cloudImport = CloudImportMonitor()
     let clock = SystemClock()
+    private let notifier = LocalNotifier()
     let engine: SyncEngine
     private static let setupKey = "hasFinishedSetupOnThisDevice"
 
@@ -44,8 +46,10 @@ final class SyncCoordinator {
             ledger: ledger,
             settings: settingsStore,
             judge: UnavailableMatchJudge(),
-            clock: clock
+            clock: clock,
+            notifier: notifier
         )
+        UNUserNotificationCenter.current().delegate = notifier
     }
 
     func load() async {
@@ -53,8 +57,8 @@ final class SyncCoordinator {
         // The setup flag can come back from a device backup, and access can be revoked
         // in Settings. Either way, setup has to ask again before syncing can work.
         if hasFinishedSetupOnThisDevice, await calendar.accessMode() == .none {
-            UserDefaults.standard.removeObject(forKey: Self.setupKey)
-            hasFinishedSetupOnThisDevice = false
+            await engine.report(.calendarAccessRevoked)
+            forgetSetup()
         }
         hasLoaded = true
     }
@@ -75,6 +79,7 @@ final class SyncCoordinator {
         await settingsStore.save(settings)
         UserDefaults.standard.set(true, forKey: Self.setupKey)
         hasFinishedSetupOnThisDevice = true
+        await notifier.requestAuthorization()
         await sync()
     }
 
@@ -103,8 +108,16 @@ final class SyncCoordinator {
             let createdCount = result.actions.count { if case .create = $0 { true } else { false } }
             lastPass = Pass(finishedAt: clock.now, createdCount: createdCount)
             lastError = nil
+        } catch CalendarStoreError.calendarNotFound(let id) where id == settings.destinationCalendar?.id {
+            // The destination was deleted. Setup lets the user choose another.
+            forgetSetup()
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    private func forgetSetup() {
+        UserDefaults.standard.removeObject(forKey: Self.setupKey)
+        hasFinishedSetupOnThisDevice = false
     }
 }

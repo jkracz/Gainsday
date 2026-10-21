@@ -29,7 +29,7 @@ extension SyncEngine {
                 await self.settings.save(settings)
             }
         }
-        let composer = EventComposer(locale: clock.locale, footerEnabled: settings.footerEnabled)
+        let composer = EventComposer(settings: settings, clock: clock)
         return SyncResult(actions: try await engine.syncAdded(found, to: destination.id, settings: settings, composer: composer))
     }
 

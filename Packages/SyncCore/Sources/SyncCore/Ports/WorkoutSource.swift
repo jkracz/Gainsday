@@ -36,3 +36,9 @@ public protocol WorkoutSource: Sendable {
     /// The most recent workouts, newest first, for the template preview picker.
     func recentWorkouts(limit: Int) async throws -> [Workout]
 }
+
+public enum WorkoutSourceError: Error, Hashable, Sendable {
+    /// Health access is off. HealthKit hides denied read access by returning no
+    /// results, so this is only reported when HealthKit says so.
+    case accessDenied
+}
