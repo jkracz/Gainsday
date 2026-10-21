@@ -76,11 +76,12 @@ extension SyncEngine {
             .sorted { ($0.content.start, $0.id) < ($1.content.start, $1.id) }
     }
 
-    /// The calendars the user lets the app search, or by default the destination plus
-    /// the default calendar. Only calendars the app can write to are searched.
+    /// The calendars the user lets the app search, or, when they haven't picked any, the
+    /// destination plus the default calendar. Only calendars the app can write to are searched.
     private func searchCalendarIDs(destination calendarID: String, settings: Settings) async throws -> Set<String> {
-        var searched = Set(settings.searchCalendars?.map(\.id) ?? [calendarID])
-        if settings.searchCalendars == nil, let defaultID = await calendar.defaultCalendarID() {
+        let picked = settings.searchCalendars.flatMap { $0.isEmpty ? nil : $0 }
+        var searched = Set(picked?.map(\.id) ?? [calendarID])
+        if picked == nil, let defaultID = await calendar.defaultCalendarID() {
             searched.insert(defaultID)
         }
         return searched.intersection(try await calendar.writableCalendars().map(\.id))
