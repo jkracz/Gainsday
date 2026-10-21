@@ -18,6 +18,8 @@ final class SyncCoordinator {
     private(set) var isSyncing = false
     private(set) var lastPass: Pass?
     private(set) var lastError: String?
+    /// Add-only access greys out features that need to read or change events.
+    private(set) var calendarAccess = AccessMode.none
 
     let health: HealthKitWorkoutSource
     let calendar: EventKitCalendarStore
@@ -49,9 +51,10 @@ final class SyncCoordinator {
 
     func load() async {
         settings = await settingsStore.load()
+        calendarAccess = await calendar.accessMode()
         // The setup flag can come back from a device backup, and access can be revoked
         // in Settings. Either way, setup has to ask again before syncing can work.
-        if hasFinishedSetupOnThisDevice, await calendar.accessMode() == .none {
+        if hasFinishedSetupOnThisDevice, calendarAccess == .none {
             UserDefaults.standard.removeObject(forKey: Self.setupKey)
             hasFinishedSetupOnThisDevice = false
         }

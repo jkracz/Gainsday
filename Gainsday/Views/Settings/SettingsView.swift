@@ -7,6 +7,8 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            CalendarAccessSection()
+
             Section {
                 WorkoutTypesLink()
                 Picker("Minimum Duration", selection: minimumDuration) {

@@ -8,6 +8,8 @@ struct SetupView: View {
     @State private var calendars: [CalendarInfo]?
     @State private var selectedCalendarID: String?
     @State private var calendarAccessDenied = false
+    @State private var isAddOnly = false
+    @State private var isChoosingAddOnlyCalendar = false
     @State private var isStarting = false
     @State private var errorMessage: String?
 
@@ -33,7 +35,11 @@ struct SetupView: View {
                 }
 
                 Section {
-                    if let calendars {
+                    if isAddOnly {
+                        Button { isChoosingAddOnlyCalendar = true } label: {
+                            LabeledContent("Calendar", value: selectedCalendar?.title ?? String(localized: "None"))
+                        }
+                    } else if let calendars {
                         Picker("Calendar", selection: $selectedCalendarID) {
                             Text("None").tag(String?.none)
                             ForEach(calendars) { calendar in
@@ -44,12 +50,17 @@ struct SetupView: View {
                         Button("Choose a Calendar", systemImage: "calendar") {
                             Task { await loadCalendars() }
                         }
+                        Button("Add Events Only", systemImage: "calendar.badge.plus") {
+                            Task { await useAddOnlyAccess() }
+                        }
                     }
                 } header: {
                     Text("Calendar")
                 } footer: {
                     if calendarAccessDenied {
-                        Text("Turn on full calendar access for Gainsday in Settings, then try again.")
+                        Text("Turn on calendar access for Gainsday in Settings, then try again.")
+                    } else if isAddOnly {
+                        Text("Gainsday can add events but can't see, change or delete them. You can give it full access later.")
                     } else {
                         Text("Full access lets Gainsday see the events it already added, so it never adds a workout twice.")
                     }
@@ -84,9 +95,19 @@ struct SetupView: View {
             .navigationTitle("Set Up Gainsday")
             .task {
                 // Keep the list current if the user adds or removes a calendar elsewhere.
-                for await _ in coordinator.calendar.changes() where calendars != nil {
+                for await _ in coordinator.calendar.changes() where calendars != nil && !isAddOnly {
                     await refreshCalendars()
                 }
+            }
+            .sheet(isPresented: $isChoosingAddOnlyCalendar) {
+                CalendarChooser(selectedID: selectedCalendarID ?? coordinator.settings.destinationCalendar?.id) { chosen in
+                    if let chosen {
+                        calendars = [chosen]
+                        selectedCalendarID = chosen.id
+                    }
+                    isChoosingAddOnlyCalendar = false
+                }
+                .ignoresSafeArea()
             }
             .onChange(of: coordinator.settings.destinationCalendar) {
                 // Settings restored from iCloud can arrive after the list has loaded.
@@ -113,6 +134,18 @@ struct SetupView: View {
             calendarAccessDenied = !(try await coordinator.calendar.requestFullAccess())
             guard !calendarAccessDenied else { return }
             await refreshCalendars()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Add-only access can't list calendars, so the system chooser picks one.
+    private func useAddOnlyAccess() async {
+        do {
+            calendarAccessDenied = !(try await coordinator.calendar.requestAddOnlyAccess())
+            guard !calendarAccessDenied else { return }
+            isAddOnly = true
+            isChoosingAddOnlyCalendar = true
         } catch {
             errorMessage = error.localizedDescription
         }

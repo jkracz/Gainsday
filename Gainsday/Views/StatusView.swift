@@ -19,6 +19,10 @@ struct StatusView: View {
                     Text("Workouts you finish appear in this calendar when you open Gainsday.")
                 }
 
+                if !coordinator.hasFullCalendarAccess {
+                    CalendarAccessSection()
+                }
+
                 Section("Last Sync") {
                     if coordinator.isSyncing {
                         LabeledContent("Syncing…") {
