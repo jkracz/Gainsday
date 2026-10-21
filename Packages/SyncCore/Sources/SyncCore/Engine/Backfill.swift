@@ -73,7 +73,9 @@ private actor DryRunCalendarStore: CalendarStore {
     }
 
     func events(in interval: DateInterval, calendarIDs: Set<String>) async throws -> [CalendarEvent] {
-        let real = try await base.events(in: interval, calendarIDs: calendarIDs)
+        // An event this copy updated is in `created`, so its real version is left out.
+        let pretendIDs = Set(created.map(\.id))
+        let real = try await base.events(in: interval, calendarIDs: calendarIDs).filter { !pretendIDs.contains($0.id) }
         let pretend = created.filter {
             calendarIDs.contains($0.calendarID) && $0.content.start < interval.end && $0.content.end > interval.start
         }
@@ -105,6 +107,10 @@ private actor DryRunCalendarStore: CalendarStore {
     }
 
     func refreshSources() async {}
+
+    func defaultCalendarID() async -> String? {
+        await base.defaultCalendarID()
+    }
 }
 
 /// A ledger for previews: the real entries overlaid with this copy's saves and deletes.

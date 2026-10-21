@@ -69,7 +69,7 @@ extension SyncAction {
         switch self {
         case .create(let workoutID, _), .update(let workoutID, _, _), .delete(let workoutID, _),
              .skip(let workoutID, _), .release(let workoutID, _), .holdForReview(let workoutID),
-             .relink(let workoutID, _):
+             .relink(let workoutID, _), .adopt(let workoutID, _, _, _):
             workoutID
         }
     }

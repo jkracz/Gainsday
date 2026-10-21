@@ -78,6 +78,9 @@ struct ActivityRecorder {
             if let title = try? await engine.ledger.entries(forWorkout: workoutID).compactMap(\.written?.title).first {
                 entry.title = title
             }
+        case .adopt(_, _, let content, _):
+            // The planned event keeps the user's title. Undo comes with the adopted-event lifecycle.
+            entry.title = content.title
         case .update(_, _, let content):
             entry.title = content.title
             entry.undo = previous?.written.map { .restoreEvent($0) }
@@ -95,7 +98,8 @@ struct ActivityRecorder {
 private extension SyncAction {
     var eventID: String? {
         switch self {
-        case .update(_, let eventID, _), .delete(_, let eventID), .release(_, let eventID), .relink(_, let eventID): eventID
+        case .update(_, let eventID, _), .delete(_, let eventID), .release(_, let eventID), .relink(_, let eventID),
+             .adopt(_, let eventID, _, _): eventID
         case .create, .skip, .holdForReview: nil
         }
     }

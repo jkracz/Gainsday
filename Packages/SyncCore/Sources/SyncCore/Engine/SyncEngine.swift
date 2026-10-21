@@ -79,6 +79,9 @@ public struct SyncEngine: Sendable {
         if let relinked = try await relinkEarlierEvent(for: cluster, in: calendarID, composer: composer) {
             return relinked
         }
+        if let matched = try await matchPlannedEvent(for: cluster, destination: calendarID, settings: settings, composer: composer) {
+            return matched
+        }
 
         let draft = EventDraft(calendarID: calendarID, content: composer.content(for: workout), availability: .free)
         if await calendar.accessMode() == .addOnly {

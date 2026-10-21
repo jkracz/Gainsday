@@ -6,8 +6,10 @@ import Foundation
 public enum Footer {
     /// The footer line for a workout. Not localised, so the app can always recognise it.
     public static func line(for workoutID: UUID) -> String {
-        "— Logged by Gainsday · \(workoutID.shortID)"
+        prefix + workoutID.shortID
     }
+
+    private static let prefix = "— Logged by Gainsday · "
 
     /// The notes with the footer appended after a blank line.
     public static func appending(to notes: String, workoutID: UUID) -> String {
@@ -17,5 +19,10 @@ public enum Footer {
     /// Whether the notes carry the workout's footer.
     public static func isPresent(in notes: String?, workoutID: UUID) -> Bool {
         notes?.contains(line(for: workoutID)) ?? false
+    }
+
+    /// Whether the notes carry any workout's footer.
+    static func isAnyPresent(in notes: String?) -> Bool {
+        notes?.contains(prefix) ?? false
     }
 }

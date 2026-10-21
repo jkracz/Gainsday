@@ -34,6 +34,21 @@ public struct Settings: Hashable, Codable, Sendable {
     public var preferredAccessMode: AccessMode
     /// The earliest workout start eligible for syncing. Nil until setup finishes.
     public var syncStartDate: Date?
+    /// [v1.1] Whether workouts are matched to events the user planned. Off until the user opts in.
+    public var matchingEnabled: Bool
+    public var matchMode: MatchMode
+    /// [v1.1] The calendars searched for planned events. Nil means the destination plus the default calendar.
+    public var searchCalendars: [CalendarReference]?
+    /// [v1.1] How far a planned event's start may be from the workout's start, when they don't overlap.
+    public var matchWindow: TimeInterval
+    /// [v1.1] The user's own keywords per type, on top of `MatchKeywords.builtIn`.
+    public var matchKeywords: [WorkoutActivityType: [String]]
+    /// [v1.1] Whether the on-device model decides matches the rules find unclear.
+    public var matchModelEnabled: Bool
+    /// [v1.1] Hold unclear matches for the user's review instead of adding a separate event.
+    public var holdUnclearMatchesForReview: Bool
+    /// [v1.1] Also rename an adopted event to the title template, instead of keeping the user's title.
+    public var renameMatchedEvents: Bool
 
     public init(
         enabledTypes: Set<WorkoutActivityType> = Settings.defaultEnabledTypes,
@@ -44,7 +59,15 @@ public struct Settings: Hashable, Codable, Sendable {
         templateOverrides: [WorkoutActivityType: EventTemplate] = [:],
         footerEnabled: Bool = true,
         preferredAccessMode: AccessMode = .full,
-        syncStartDate: Date? = nil
+        syncStartDate: Date? = nil,
+        matchingEnabled: Bool = false,
+        matchMode: MatchMode = .updatePlannedEvent,
+        searchCalendars: [CalendarReference]? = nil,
+        matchWindow: TimeInterval = 60 * 60,
+        matchKeywords: [WorkoutActivityType: [String]] = [:],
+        matchModelEnabled: Bool = true,
+        holdUnclearMatchesForReview: Bool = false,
+        renameMatchedEvents: Bool = false
     ) {
         self.enabledTypes = enabledTypes
         self.minimumDuration = minimumDuration
@@ -55,6 +78,14 @@ public struct Settings: Hashable, Codable, Sendable {
         self.footerEnabled = footerEnabled
         self.preferredAccessMode = preferredAccessMode
         self.syncStartDate = syncStartDate
+        self.matchingEnabled = matchingEnabled
+        self.matchMode = matchMode
+        self.searchCalendars = searchCalendars
+        self.matchWindow = matchWindow
+        self.matchKeywords = matchKeywords
+        self.matchModelEnabled = matchModelEnabled
+        self.holdUnclearMatchesForReview = holdUnclearMatchesForReview
+        self.renameMatchedEvents = renameMatchedEvents
     }
 
     /// Every known type except walking, so everyday walks stay out of the calendar unless the user turns them on.
@@ -82,6 +113,14 @@ extension Settings {
         container.decode(&footerEnabled, .footerEnabled)
         container.decode(&preferredAccessMode, .preferredAccessMode)
         container.decode(&syncStartDate, .syncStartDate)
+        container.decode(&matchingEnabled, .matchingEnabled)
+        container.decode(&matchMode, .matchMode)
+        container.decode(&searchCalendars, .searchCalendars)
+        container.decode(&matchWindow, .matchWindow)
+        container.decode(&matchKeywords, .matchKeywords)
+        container.decode(&matchModelEnabled, .matchModelEnabled)
+        container.decode(&holdUnclearMatchesForReview, .holdUnclearMatchesForReview)
+        container.decode(&renameMatchedEvents, .renameMatchedEvents)
     }
 }
 

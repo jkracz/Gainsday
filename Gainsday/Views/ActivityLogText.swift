@@ -12,6 +12,17 @@ extension SyncAction {
         case .holdForReview: "Waiting for your review"
         case .relink: "Found in your calendar and linked again, so it isn't added twice"
         case .skip(_, let reason): reason.logDescription
+        case .adopt(_, _, _, let decider): decider.logDescription
+        }
+    }
+}
+
+extension MatchDecider {
+    /// Says what matched the workout to the user's planned event.
+    var logDescription: LocalizedStringResource {
+        switch self {
+        case .rules: "Matched to your planned event by its title, and updated with the workout"
+        case .model: "Matched to your planned event by the on-device model, and updated with the workout"
         }
     }
 }
