@@ -14,7 +14,7 @@ extension SyncCoordinator {
     func match(_ entry: ActivityLogEntry, to event: CalendarEvent) async throws {
         runningPasses += 1
         defer { runningPasses -= 1 }
-        try await runner.match(entryID: entry.id, toEventID: event.id)
+        try await withTimeout(Self.passTimeout) { try await self.runner.match(entryID: entry.id, toEventID: event.id) }
         await refreshActivityLog()
     }
 
@@ -22,7 +22,7 @@ extension SyncCoordinator {
     func addSeparateEvent(for entry: ActivityLogEntry) async throws {
         runningPasses += 1
         defer { runningPasses -= 1 }
-        try await runner.addSeparateEvent(entryID: entry.id)
+        try await withTimeout(Self.passTimeout) { try await self.runner.addSeparateEvent(entryID: entry.id) }
         await refreshActivityLog()
     }
 }
