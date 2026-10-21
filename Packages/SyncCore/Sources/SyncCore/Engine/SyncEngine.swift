@@ -42,8 +42,9 @@ public struct SyncEngine: Sendable {
             }
             let changes = try await workouts.changes(since: anchor)
             let composer = EventComposer(locale: clock.locale, footerEnabled: settings.footerEnabled)
+            let linked = try await linkEventsAddedWithoutReadAccess()
             let followed = try await followDeletions(in: changes, settings: settings, composer: composer)
-            var actions = followed.actions
+            var actions = linked + followed.actions
             for workout in followed.remaining.sorted(by: { $0.start < $1.start }) {
                 actions.append(try await sync(workout, to: destination.id, settings: settings, composer: composer))
             }
@@ -67,6 +68,9 @@ public struct SyncEngine: Sendable {
         }
 
         let draft = EventDraft(calendarID: calendarID, content: composer.content(for: workout), availability: .free)
+        if await calendar.accessMode() == .addOnly {
+            return try await createWithoutReadAccess(for: workout, draft)
+        }
         let event = try await calendar.create(draft)
         let now = clock.now
         do {
