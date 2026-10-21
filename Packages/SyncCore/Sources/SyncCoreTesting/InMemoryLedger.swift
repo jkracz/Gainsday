@@ -5,6 +5,7 @@ import SyncCore
 /// for the same workout.
 public actor InMemoryLedger: Ledger {
     private var storedEntries: [UUID: LedgerEntry] = [:]
+    private var saveError: (any Error)?
 
     public init(entries: [LedgerEntry] = []) {
         for entry in entries {
@@ -25,7 +26,13 @@ public actor InMemoryLedger: Ledger {
         allEntries.filter { $0.workoutStart < interval.end && $0.workoutEnd > interval.start }
     }
 
+    /// Makes every later save throw `error`, as a full disk or store failure would.
+    public func failSaves(with error: any Error) {
+        saveError = error
+    }
+
     public func save(_ entry: LedgerEntry) async throws {
+        if let saveError { throw saveError }
         storedEntries[entry.id] = entry
     }
 

@@ -8,6 +8,12 @@ struct SyncHarness {
     static let now = Date(timeIntervalSince1970: 1_790_000_000) // 21 Sep 2026, 14:13 UTC
     static let destination = CalendarInfo(id: "workouts", title: "Workouts")
     static let watch = WorkoutSourceApp(bundleIdentifier: "com.apple.health", name: "Apple Watch")
+    /// Set up a week ago, writing to the destination calendar.
+    static let defaultSettings = Settings(
+        enabledTypes: [.running, .cycling, .traditionalStrengthTraining],
+        destinationCalendar: CalendarReference(id: destination.id, title: destination.title),
+        syncStartDate: now.addingTimeInterval(-7 * 24 * 60 * 60)
+    )
 
     let clock: FixedClock
     let workouts: InMemoryWorkoutSource
@@ -19,11 +25,7 @@ struct SyncHarness {
 
     init(
         workouts: [Workout] = [],
-        settings: Settings = Settings(
-            enabledTypes: [.running, .cycling, .traditionalStrengthTraining],
-            destinationCalendar: CalendarReference(id: destination.id, title: destination.title),
-            syncStartDate: now.addingTimeInterval(-7 * 24 * 60 * 60)
-        ),
+        settings: Settings = defaultSettings,
         accessMode: AccessMode = .full
     ) {
         clock = FixedClock(now: Self.now)
