@@ -1,4 +1,6 @@
 import Foundation
+import HealthKit
+import SyncCore
 import Testing
 @testable import Gainsday
 
@@ -28,6 +30,20 @@ struct HealthKitWorkoutSourceTests {
         }
         await #expect(throws: HealthKitWorkoutSource.Unavailable.self) {
             _ = try await source.recentWorkouts(limit: 1)
+        }
+    }
+
+    @Test("A read while the phone is locked is reported as locked, so the pass can be run again after unlock")
+    func lockedReadsAreReportedAsLocked() async {
+        await #expect(throws: WorkoutSourceError.locked) {
+            try await HealthKitWorkoutSource.mappingAccessErrors { throw HKError(.errorDatabaseInaccessible) }
+        }
+    }
+
+    @Test("Turning on background delivery fails clearly when Health isn't available")
+    func backgroundDeliveryFailsWhenUnavailable() async {
+        await #expect(throws: HealthKitWorkoutSource.Unavailable.self) {
+            try await source.enableBackgroundDelivery()
         }
     }
 }

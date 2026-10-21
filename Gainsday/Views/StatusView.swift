@@ -16,7 +16,7 @@ struct StatusView: View {
                         }
                     }
                 } footer: {
-                    Text("Workouts you finish appear in this calendar when you open Gainsday.")
+                    SyncTimingFooter()
                 }
 
                 Section {
