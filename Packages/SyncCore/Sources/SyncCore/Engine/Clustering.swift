@@ -87,15 +87,35 @@ extension SyncEngine {
     }
 
     /// Records the cluster's members in the entry that already holds the workout, so
-    /// a copy that arrives late never makes a second event.
-    func join(_ cluster: WorkoutCluster, to entry: LedgerEntry) async throws -> SyncAction {
-        var entry = entry
-        if !cluster.memberIDs.isSubset(of: entry.memberIDs) {
-            entry.memberIDs.formUnion(cluster.memberIDs)
-            entry.updatedAt = clock.now
-            try await ledger.save(entry)
+    /// a copy that arrives late never makes a second event. When the newcomer is
+    /// preferred over every member still in Health, e.g. the Watch's copy arriving
+    /// after Strava's, it becomes the cluster's identity and the event shows its values.
+    func join(_ cluster: WorkoutCluster, to entry: LedgerEntry, composer: EventComposer) async throws -> SyncAction {
+        var entry = try await correctExternalIdentifier(of: entry)
+        let reason: SkipReason = entry.state == .tombstoned ? .tombstoned : .alreadySynced
+        guard !cluster.memberIDs.isSubset(of: entry.memberIDs) else {
+            return .skip(workoutID: cluster.preferred.id, reason)
         }
-        try await correctExternalIdentifier(of: entry)
-        return .skip(workoutID: cluster.preferred.id, entry.state == .tombstoned ? .tombstoned : .alreadySynced)
+        let earlier = try await healthWorkouts(in: entry)
+        entry.memberIDs.formUnion(cluster.memberIDs)
+        if cluster.preferred.id != entry.workoutID,
+           earlier.allSatisfy({ Workout.isPreferred(cluster.preferred, over: $0) }) {
+            entry.takeIdentity(from: cluster.preferred)
+            return try await rewrite(entry, for: cluster.preferred, composer: composer)
+        }
+        entry.updatedAt = clock.now
+        try await ledger.save(entry)
+        return .skip(workoutID: cluster.preferred.id, reason)
+    }
+}
+
+extension LedgerEntry {
+    /// Makes the workout the cluster's identity, keeping every other member.
+    mutating func takeIdentity(from workout: Workout) {
+        workoutID = workout.id
+        memberIDs.insert(workout.id)
+        workoutStart = workout.start
+        workoutEnd = workout.end
+        activityType = workout.activityType
     }
 }

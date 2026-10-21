@@ -50,6 +50,52 @@ struct ClusteringTests {
         #expect(entry.memberIDs == [watchRun.id, stravaRun.id])
     }
 
+    @Test("A Watch copy arriving after Strava's updates the event in place with the Watch's values")
+    func lateWatchCopyTakesOverEvent() async throws {
+        let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let stravaRun = SyncHarness.stravaCopy(of: watchRun)
+        let harness = SyncHarness(workouts: [stravaRun])
+        let first = try await harness.engine.run(.changes(since: nil))
+        let event = try #require(await harness.calendar.allEvents.first)
+
+        await harness.workouts.add(watchRun)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        let updated = try #require(await harness.calendar.allEvents.first)
+        #expect(await harness.calendar.allEvents.count == 1)
+        #expect(updated.id == event.id)
+        #expect(updated.content.start == watchRun.start)
+        #expect(updated.content.notes?.contains("3.11 mi") == true)
+        #expect(updated.content.notes?.hasSuffix(watchRun.shortID) == true)
+        #expect(second.actions == [.update(workoutID: watchRun.id, eventID: event.id, updated.content)])
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(await harness.ledger.allEntries.count == 1)
+        #expect(entry.workoutID == watchRun.id)
+        #expect(entry.memberIDs == [watchRun.id, stravaRun.id])
+        #expect(entry.workoutStart == watchRun.start)
+        #expect(entry.written == updated.content)
+    }
+
+    @Test("A late Watch copy leaves an event the user edited alone and releases it")
+    func lateWatchCopyReleasesEditedEvent() async throws {
+        let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let stravaRun = SyncHarness.stravaCopy(of: watchRun)
+        let harness = SyncHarness(workouts: [stravaRun])
+        let first = try await harness.engine.run(.changes(since: nil))
+        var edited = try #require(await harness.calendar.allEvents.first)
+        edited.content.title = "Tempo run with Sam"
+        await harness.calendar.put(edited)
+
+        await harness.workouts.add(watchRun)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions == [.release(workoutID: watchRun.id, eventID: edited.id)])
+        #expect(await harness.calendar.allEvents == [edited])
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(entry.state == .released)
+        #expect(entry.memberIDs == [watchRun.id, stravaRun.id])
+    }
+
     @Test("With a Strava-only allowlist, the Watch copy is ignored and the event shows Strava's values")
     func stravaOnlyAllowlistIgnoresWatch() async throws {
         let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
