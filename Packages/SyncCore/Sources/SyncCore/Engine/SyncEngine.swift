@@ -44,8 +44,8 @@ public struct SyncEngine: Sendable {
             let composer = EventComposer(locale: clock.locale, footerEnabled: settings.footerEnabled)
             let followed = try await followDeletions(in: changes, settings: settings, composer: composer)
             var actions = followed.actions
-            for workout in followed.remaining.sorted(by: { $0.start < $1.start }) {
-                actions.append(try await sync(workout, to: destination.id, settings: settings, composer: composer))
+            for cluster in WorkoutCluster.clusters(of: followed.remaining) {
+                actions.append(try await sync(cluster, to: destination.id, settings: settings, composer: composer))
             }
             return SyncResult(actions: actions, nextAnchor: changes.anchor)
         case .backfill(let interval, _):
@@ -54,13 +54,13 @@ public struct SyncEngine: Sendable {
         }
     }
 
-    private func sync(_ workout: Workout, to calendarID: String, settings: Settings, composer: EventComposer) async throws -> SyncAction {
+    private func sync(_ cluster: WorkoutCluster, to calendarID: String, settings: Settings, composer: EventComposer) async throws -> SyncAction {
+        let workout = cluster.preferred
         if let reason = settings.skipReason(for: workout) {
             return .skip(workoutID: workout.id, reason)
         }
-        if let entry = try await resolvedEntry(forWorkout: workout.id) {
-            try await correctExternalIdentifier(of: entry)
-            return .skip(workoutID: workout.id, entry.state == .tombstoned ? .tombstoned : .alreadySynced)
+        if let entry = try await existingEntry(for: cluster) {
+            return try await join(cluster, to: entry)
         }
         if let relinked = try await relinkEarlierEvent(for: workout, in: calendarID, composer: composer) {
             return relinked
@@ -72,6 +72,7 @@ public struct SyncEngine: Sendable {
         do {
             try await ledger.save(LedgerEntry(
                 workoutID: workout.id,
+                memberIDs: cluster.memberIDs,
                 workoutStart: workout.start,
                 workoutEnd: workout.end,
                 state: .owned,
