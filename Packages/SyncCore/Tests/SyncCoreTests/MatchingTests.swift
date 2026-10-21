@@ -297,6 +297,25 @@ struct MatchingTests {
         #expect(await harness.calendar.allEvents.map(\.content.start) == [workout.start])
     }
 
+    @Test("Copies of one workout from the Watch and Strava adopt one plan together")
+    func clusterAdoptsOnePlan() async throws {
+        let watch = SyncHarness.run(from: (10, 10), to: (11, 5))
+        let strava = SyncHarness.stravaCopy(of: watch)
+        let harness = try await SyncHarness.matching(workouts: [watch, strava])
+        let planned = SyncHarness.planned("Run", from: (10, 0), to: (11, 0))
+        await harness.calendar.put(planned)
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        #expect(result.actions.map(\.matchDecider) == [.rules])
+        #expect(await harness.calendar.allEvents.map(\.id) == [planned.id])
+        #expect(await harness.calendar.allEvents.first?.content.start == watch.start)
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(await harness.ledger.allEntries.count == 1)
+        #expect(entry.workoutID == watch.id)
+        #expect(entry.memberIDs == [watch.id, strava.id])
+    }
+
     @Test("A workout already matched is skipped by later passes")
     func matchedWorkoutIsNotMatchedAgain() async throws {
         let workout = SyncHarness.run(from: (10, 10), to: (11, 5))

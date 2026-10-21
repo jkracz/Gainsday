@@ -11,12 +11,13 @@ enum MatchDecision {
 /// Matching planned events: a workout the user put in their calendar beforehand
 /// updates that event in place instead of getting a separate one. [v1.1]
 extension SyncEngine {
-    /// Finds the event the user planned for a workout that has no event yet, and adopts
+    /// Finds the event the user planned for a workout cluster that has no event yet, and adopts
     /// it: the event moves to the workout's times, keeps its title, and gains a workout
     /// section in its notes. Returns nil when the workout should get a separate owned
     /// event instead: matching is off or in "create separate event" mode, the app can't
     /// read calendars, nothing matches, the match is unclear, or the event has guests.
-    func matchPlannedEvent(for workout: Workout, destination calendarID: String, settings: Settings, composer: EventComposer) async throws -> SyncAction? {
+    func matchPlannedEvent(for cluster: WorkoutCluster, destination calendarID: String, settings: Settings, composer: EventComposer) async throws -> SyncAction? {
+        let workout = cluster.preferred
         guard settings.matchingEnabled, settings.matchMode == .updatePlannedEvent,
               await calendar.accessMode() == .full else { return nil }
         // A plan added on the web moments ago may not have reached the phone yet.
@@ -38,7 +39,7 @@ extension SyncEngine {
             // Changing an event with guests can email every one of them, so only the
             // user's own events are updated, whatever decided the match.
             guard event.attendeeCount == 0 else { return nil }
-            return try await adopt(event, for: workout, decidedBy: decider, settings: settings, composer: composer)
+            return try await adopt(event, for: cluster, decidedBy: decider, settings: settings, composer: composer)
         case .separateEvent:
             return nil
         }
@@ -88,7 +89,8 @@ extension SyncEngine {
     /// Moves the planned event to the workout's times and puts the workout section in its
     /// notes, keeping the user's title and notes. The event before the update is kept in
     /// the ledger, for Undo and for when the workout is deleted.
-    private func adopt(_ event: CalendarEvent, for workout: Workout, decidedBy decider: MatchDecider, settings: Settings, composer: EventComposer) async throws -> SyncAction {
+    private func adopt(_ event: CalendarEvent, for cluster: WorkoutCluster, decidedBy decider: MatchDecider, settings: Settings, composer: EventComposer) async throws -> SyncAction {
+        let workout = cluster.preferred
         var content = event.content
         content.start = workout.start
         content.end = workout.end
@@ -105,6 +107,7 @@ extension SyncEngine {
         do {
             try await ledger.save(LedgerEntry(
                 workoutID: workout.id,
+                memberIDs: cluster.memberIDs,
                 workoutStart: workout.start,
                 workoutEnd: workout.end,
                 state: .adopted,
