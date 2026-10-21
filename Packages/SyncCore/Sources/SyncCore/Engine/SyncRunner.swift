@@ -48,6 +48,13 @@ public actor SyncRunner {
         try await enqueue { try await self.engine.undo(entryID: entryID) }.value
     }
 
+    /// Undoes an update to a planned event, doing what the user chose with the workout,
+    /// once any pass already running has finished.
+    @discardableResult
+    public func undo(entryID: UUID, choice: ActivityLogEntry.PlannedEventUndoChoice) async throws -> ActivityLogEntry {
+        try await enqueue { try await self.engine.undo(entryID: entryID, choice: choice) }.value
+    }
+
     /// Starts `pass` once every pass queued before it has finished.
     private func enqueue<Value: Sendable>(_ pass: @escaping @Sendable () async throws -> Value) -> Task<Value, any Error> {
         let previous = queueTail
