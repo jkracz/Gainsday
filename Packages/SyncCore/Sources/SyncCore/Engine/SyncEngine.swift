@@ -42,8 +42,14 @@ public struct SyncEngine: Sendable {
             }
             let changes = try await workouts.changes(since: anchor)
             let composer = EventComposer(locale: clock.locale, footerEnabled: settings.footerEnabled)
-            let followed = try await followDeletions(in: changes, settings: settings, composer: composer)
-            var actions = followed.actions
+            let (allowed, notAllowed) = settings.splitBySource(changes.added)
+            var actions = notAllowed.map { SyncAction.skip(workoutID: $0.id, .sourceNotAllowed) }
+            let followed = try await followDeletions(
+                in: WorkoutChanges(added: allowed, deletedIDs: changes.deletedIDs, anchor: changes.anchor),
+                settings: settings,
+                composer: composer
+            )
+            actions += followed.actions
             for cluster in WorkoutCluster.clusters(of: followed.remaining) {
                 actions.append(try await sync(cluster, to: destination.id, settings: settings, composer: composer))
             }

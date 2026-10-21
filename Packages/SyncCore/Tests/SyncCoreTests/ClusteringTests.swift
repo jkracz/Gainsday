@@ -49,6 +49,49 @@ struct ClusteringTests {
         #expect(entry.workoutID == watchRun.id)
         #expect(entry.memberIDs == [watchRun.id, stravaRun.id])
     }
+
+    @Test("With a Strava-only allowlist, the Watch copy is ignored and the event shows Strava's values")
+    func stravaOnlyAllowlistIgnoresWatch() async throws {
+        let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let stravaRun = SyncHarness.stravaCopy(of: watchRun)
+        var settings = SyncHarness.defaultSettings
+        settings.sourceAllowlist = [SyncHarness.strava.bundleIdentifier]
+        let harness = SyncHarness(workouts: [watchRun, stravaRun], settings: settings)
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        let event = try #require(await harness.calendar.allEvents.first)
+        #expect(await harness.calendar.allEvents.count == 1)
+        #expect(event.content.start == stravaRun.start)
+        #expect(event.content.notes?.contains("3.18 mi") == true) // Strava's 5.12 km
+        #expect(event.content.notes?.hasSuffix(stravaRun.shortID) == true)
+        #expect(result.actions.first == .skip(workoutID: watchRun.id, .sourceNotAllowed))
+        #expect(result.actions.count == 2)
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(entry.workoutID == stravaRun.id)
+        #expect(entry.covers(watchRun.id) == false)
+    }
+
+    @Test("A Watch copy the allowlist leaves out never replaces a deleted Strava workout's event")
+    func disallowedCopyIsNotAReplacement() async throws {
+        let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let stravaRun = SyncHarness.stravaCopy(of: watchRun)
+        var settings = SyncHarness.defaultSettings
+        settings.sourceAllowlist = [SyncHarness.strava.bundleIdentifier]
+        let harness = SyncHarness(workouts: [stravaRun], settings: settings)
+        let first = try await harness.engine.run(.changes(since: nil))
+        let event = try #require(await harness.calendar.allEvents.first)
+
+        await harness.workouts.delete(stravaRun.id)
+        await harness.workouts.add(watchRun)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions == [
+            .skip(workoutID: watchRun.id, .sourceNotAllowed),
+            .delete(workoutID: stravaRun.id, eventID: event.id),
+        ])
+        #expect(await harness.calendar.allEvents.isEmpty)
+    }
 }
 
 extension SyncHarness {
