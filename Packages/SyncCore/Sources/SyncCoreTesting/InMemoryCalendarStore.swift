@@ -38,6 +38,17 @@ public actor InMemoryCalendarStore: CalendarStore {
         storedEvents[eventID] = nil
     }
 
+    /// Adds a calendar, as the user can in the Calendar app.
+    public func addCalendar(_ calendar: CalendarInfo) {
+        calendars.append(calendar)
+    }
+
+    /// Deletes a calendar and its events, as the user can in the Calendar app.
+    public func removeCalendar(id: String) {
+        calendars.removeAll { $0.id == id }
+        storedEvents = storedEvents.filter { $0.value.calendarID != id }
+    }
+
     /// Changes an event's external identifier, as a server sync can.
     public func changeIdentifier(of eventID: String, to newID: String) {
         guard var event = storedEvents.removeValue(forKey: eventID) else { return }

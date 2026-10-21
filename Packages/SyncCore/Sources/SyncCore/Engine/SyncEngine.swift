@@ -9,6 +9,7 @@ public struct SyncEngine: Sendable {
     public var settings: any SettingsStore
     public var judge: any MatchJudge
     public var clock: any Clock
+    public var notifier: any ProblemNotifier
 
     public init(
         workouts: any WorkoutSource,
@@ -16,7 +17,8 @@ public struct SyncEngine: Sendable {
         ledger: any Ledger,
         settings: any SettingsStore,
         judge: any MatchJudge,
-        clock: any Clock
+        clock: any Clock,
+        notifier: any ProblemNotifier
     ) {
         self.workouts = workouts
         self.calendar = calendar
@@ -24,6 +26,7 @@ public struct SyncEngine: Sendable {
         self.settings = settings
         self.judge = judge
         self.clock = clock
+        self.notifier = notifier
     }
 
     /// Runs one sync pass.
@@ -40,7 +43,8 @@ public struct SyncEngine: Sendable {
                 // Setup isn't finished: leave Health unread so the anchor doesn't move.
                 return SyncResult()
             }
-            let changes = try await workouts.changes(since: anchor)
+            try await checkCalendar(destination)
+            let changes = try await readChanges(since: anchor)
             let composer = EventComposer(settings: settings, clock: clock)
             let followed = try await followDeletions(in: changes, settings: settings, composer: composer)
             var actions = followed.actions
@@ -67,7 +71,7 @@ public struct SyncEngine: Sendable {
         }
 
         let draft = EventDraft(calendarID: calendarID, content: composer.content(for: workout), availability: .free)
-        let event = try await calendar.create(draft)
+        let event = try await createEvent(draft)
         let now = clock.now
         do {
             try await ledger.save(LedgerEntry(
