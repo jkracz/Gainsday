@@ -97,3 +97,14 @@ extension SyncAction {
         }
     }
 }
+
+extension Collection<ActivityLogEntry> {
+    /// How many events the log shows being added on `day`, by any pass or backfill,
+    /// leaving out those the user undid.
+    public func addedEventCount(on day: Date, in calendar: Calendar) -> Int {
+        count { entry in
+            guard case .create = entry.action, entry.undoneAt == nil else { return false }
+            return calendar.isDate(entry.date, inSameDayAs: day)
+        }
+    }
+}
