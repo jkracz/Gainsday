@@ -138,6 +138,25 @@ struct ClusteringTests {
         #expect(entry.memberIDs == [watchRun.id])
     }
 
+    @Test("After a reinstall, an event whose footer names the Strava copy is re-linked to the cluster, not duplicated")
+    func reinstallFindsFooterOfAnyMember() async throws {
+        let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let stravaRun = SyncHarness.stravaCopy(of: watchRun, lateBy: 3 * 60)
+        let earlier = try await SyncHarness.eventLeftByEarlierInstall(for: stravaRun)
+        let harness = SyncHarness(workouts: [watchRun, stravaRun])
+        await harness.calendar.put(earlier)
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        #expect(result.actions == [.relink(workoutID: watchRun.id, eventID: earlier.id)])
+        #expect(await harness.calendar.allEvents == [earlier])
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(await harness.ledger.allEntries.count == 1)
+        #expect(entry.workoutID == watchRun.id)
+        #expect(entry.memberIDs == [watchRun.id, stravaRun.id])
+        #expect(entry.activityType == .running)
+    }
+
     @Test("With a Strava-only allowlist, the Watch copy is ignored and the event shows Strava's values")
     func stravaOnlyAllowlistIgnoresWatch() async throws {
         let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
@@ -186,11 +205,11 @@ extension SyncHarness {
     static let strava = WorkoutSourceApp(bundleIdentifier: "com.strava.stravaride", name: "Strava")
 
     /// Strava's copy of a workout: it starts and ends a little later and measures a different distance.
-    static func stravaCopy(of workout: Workout) -> Workout {
+    static func stravaCopy(of workout: Workout, lateBy delay: TimeInterval = 20) -> Workout {
         Workout(
             activityType: workout.activityType,
-            start: workout.start.addingTimeInterval(20),
-            end: workout.end.addingTimeInterval(45),
+            start: workout.start.addingTimeInterval(delay),
+            end: workout.end.addingTimeInterval(delay + 25),
             source: strava,
             metrics: WorkoutMetrics(distanceMeters: 5_120, averageHeartRate: 148)
         )

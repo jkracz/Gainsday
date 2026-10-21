@@ -68,7 +68,7 @@ public struct SyncEngine: Sendable {
         if let entry = try await existingEntry(for: cluster) {
             return try await join(cluster, to: entry, composer: composer)
         }
-        if let relinked = try await relinkEarlierEvent(for: workout, in: calendarID, composer: composer) {
+        if let relinked = try await relinkEarlierEvent(for: cluster, in: calendarID, composer: composer) {
             return relinked
         }
 
