@@ -14,6 +14,12 @@ struct ActivityRecorder {
     /// Ledger entries for the workouts deleted in Health, as they were before the pass.
     let before: [LedgerEntry]
 
+    init(engine: SyncEngine, added: [Workout]) {
+        self.engine = engine
+        self.added = added
+        self.before = []
+    }
+
     init(engine: SyncEngine, added: [Workout], deletedIDs: [UUID]) async throws {
         self.engine = engine
         self.added = added

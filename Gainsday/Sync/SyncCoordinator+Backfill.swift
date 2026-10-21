@@ -22,6 +22,7 @@ extension SyncCoordinator {
         lastPass = Pass(finishedAt: clock.now, createdCount: result.createdCount)
         // The sync start date may have moved back.
         await load()
+        await refreshActivityLog()
         return result.createdCount
     }
 
