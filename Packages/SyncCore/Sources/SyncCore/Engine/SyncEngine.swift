@@ -41,7 +41,7 @@ public struct SyncEngine: Sendable {
                 return SyncResult()
             }
             let changes = try await workouts.changes(since: anchor)
-            let composer = EventComposer(locale: clock.locale, footerEnabled: settings.footerEnabled)
+            let composer = EventComposer(settings: settings, clock: clock)
             let followed = try await followDeletions(in: changes, settings: settings, composer: composer)
             var actions = followed.actions
             for workout in followed.remaining.sorted(by: { $0.start < $1.start }) {
