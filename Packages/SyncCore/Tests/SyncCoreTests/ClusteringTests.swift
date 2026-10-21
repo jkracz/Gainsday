@@ -179,6 +179,19 @@ struct ClusteringTests {
         #expect(entry.covers(watchRun.id) == false)
     }
 
+    @Test("An allowlist with every app turned off adds nothing")
+    func emptyAllowlistAddsNothing() async throws {
+        let watchRun = SyncHarness.run()
+        var settings = SyncHarness.defaultSettings
+        settings.sourceAllowlist = []
+        let harness = SyncHarness(workouts: [watchRun], settings: settings)
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        #expect(result.actions == [.skip(workoutID: watchRun.id, .sourceNotAllowed)])
+        #expect(await harness.calendar.allEvents.isEmpty)
+    }
+
     @Test("After switching to a Strava-only allowlist, a late Strava copy takes over the Watch's event")
     func allowedLateCopyTakesOverFromDisallowedOne() async throws {
         let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
