@@ -145,4 +145,23 @@ struct ModelJudgeTests {
 
         try await harness.expectSeparateEvent(for: workout, leaving: [gym], result: result)
     }
+
+    @Test("A plan the model updated can be undone like any other, with a choice for the workout")
+    func modelAdoptionIsUndoable() async throws {
+        let workout = SyncHarness.run(from: (12, 5), to: (13, 0), type: .traditionalStrengthTraining)
+        let harness = try await SyncHarness.matching(workouts: [workout])
+        let gym = SyncHarness.planned("Gym w/ Alex", from: (12, 0), to: (13, 0), notes: "Leg day")
+        await harness.calendar.put(gym)
+        await harness.judge.setAvailability(.available)
+        await harness.judge.setAnswers([MatchJudgement(chosenIndex: 0, confidence: 0.9)])
+        _ = try await harness.engine.run(.changes(since: nil))
+
+        #expect(await harness.ledger.allEntries.first?.preUpdate == gym.content)
+        let entry = try #require(await harness.activityLog.entries.first)
+        #expect(entry.undo == .restorePlannedEvent(gym.content))
+
+        try await harness.engine.undo(entryID: entry.id, choice: .dropWorkout)
+
+        #expect(await harness.calendar.allEvents.map(\.content) == [gym.content])
+    }
 }
