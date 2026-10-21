@@ -31,7 +31,7 @@ final class SyncCoordinator {
     let health: HealthKitWorkoutSource
     let calendar: EventKitCalendarStore
     private let settingsStore: CloudSettingsStore
-    let cloudImport = CloudImportMonitor()
+    let cloudImport: CloudImportMonitor
     private let activityLogStore: FileActivityLogStore
     let clock = SystemClock()
     private let notifier = LocalNotifier()
@@ -50,7 +50,9 @@ final class SyncCoordinator {
         hasFinishedSetupOnThisDevice && settings.destinationCalendar != nil && settings.syncStartDate != nil
     }
 
-    init(ledger: any Ledger) {
+    /// `cloudImport` must be made before the ledger's container, so it sees the first import.
+    init(ledger: any Ledger, cloudImport: CloudImportMonitor = CloudImportMonitor()) {
+        self.cloudImport = cloudImport
         health = HealthKitWorkoutSource()
         calendar = EventKitCalendarStore()
         settingsStore = CloudSettingsStore()
