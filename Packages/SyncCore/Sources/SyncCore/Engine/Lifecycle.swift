@@ -213,7 +213,7 @@ private extension LedgerEntry {
     }
 }
 
-private extension EventContent {
+extension EventContent {
     /// Whether the event still holds what the app wrote. Times are compared to the
     /// second, since calendar stores may drop sub-second precision; nil and empty
     /// notes are the same. With no snapshot, assume the user changed it.

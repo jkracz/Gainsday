@@ -45,6 +45,46 @@ struct ActivityLogTests {
         #expect(await harness.calendar.allEvents.isEmpty)
     }
 
+    @Test("Once a pass releases an event the user edited, its create can't be undone")
+    func releasedCreateCantBeUndone() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        let first = try await harness.engine.run(.changes(since: nil))
+        let create = try #require(await harness.activityLog.entries.first)
+        var edited = try #require(await harness.calendar.allEvents.first)
+        edited.content.title = "Easy run with Sam"
+        await harness.calendar.put(edited)
+        await harness.workouts.delete(workout.id)
+        _ = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        let logged = try #require(await harness.activityLog.entries.first { $0.id == create.id })
+        #expect(logged.canUndo == false)
+        await #expect(throws: UndoError.notUndoable) {
+            try await harness.engine.undo(entryID: create.id)
+        }
+        #expect(await harness.calendar.allEvents == [edited])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
+    }
+
+    @Test("Undoing a create whose event the user edited since refuses, keeps the event and lets go of it")
+    func undoCreateOfEditedEventRefuses() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        _ = try await harness.engine.run(.changes(since: nil))
+        let create = try #require(await harness.activityLog.entries.first)
+        var edited = try #require(await harness.calendar.allEvents.first)
+        edited.content.notes = "Felt great"
+        await harness.calendar.put(edited)
+
+        await #expect(throws: UndoError.eventEditedByUser) {
+            try await harness.engine.undo(entryID: create.id)
+        }
+
+        #expect(await harness.calendar.allEvents == [edited])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
+        #expect(await harness.activityLog.entries.first?.canUndo == false)
+    }
+
     @Test("The log keeps the newest 50 entries, newest first")
     func logIsCapped() async throws {
         let harness = SyncHarness()

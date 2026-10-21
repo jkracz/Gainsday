@@ -40,7 +40,10 @@ struct ActivityRecorder {
             }
         }
         guard !recorded.isEmpty else { return result }
-        let log = (try? await engine.activityLog.load()) ?? []
+        var log = (try? await engine.activityLog.load()) ?? []
+        for case .release(let workoutID, let eventID) in result.actions {
+            log = log.map { $0.lettingGoOfEvent(eventID, workoutID: workoutID) }
+        }
         try? await engine.activityLog.save(Array((recorded.reversed() + log).prefix(ActivityLogEntry.capacity)))
         return result
     }
@@ -107,6 +110,22 @@ struct ActivityRecorder {
             break
         }
         return entry
+    }
+}
+
+private extension ActivityLogEntry {
+    /// The entry without its Undo, if undoing it would overwrite or delete an event
+    /// the user has since edited and the app has let go of.
+    func lettingGoOfEvent(_ eventID: String, workoutID: UUID) -> ActivityLogEntry {
+        guard self.eventID == eventID || self.workoutID == workoutID else { return self }
+        switch undo {
+        case .removeCreatedEvent, .restoreEvent:
+            var entry = self
+            entry.undo = nil
+            return entry
+        default:
+            return self
+        }
     }
 }
 
