@@ -90,19 +90,23 @@ public actor InMemoryCalendarStore: CalendarStore {
 
     public func create(_ draft: EventDraft) async throws -> CalendarEvent {
         guard mode != .none else { throw CalendarStoreError.accessDenied }
-        guard let calendar = calendars.first(where: { $0.id == draft.calendarID }) else {
+        let calendarID = draft.calendarID == CalendarReference.defaultCalendarID ? defaultID : draft.calendarID
+        guard let calendar = calendars.first(where: { $0.id == calendarID }) else {
             throw CalendarStoreError.calendarNotFound(id: draft.calendarID)
         }
         let event = CalendarEvent(
             id: "event-\(nextEventNumber)",
-            calendarID: draft.calendarID,
+            calendarID: calendar.id,
             content: draft.content,
             availability: calendar.supportsAvailability ? draft.availability : .notSupported,
             lastModified: clock.now
         )
         nextEventNumber += 1
         storedEvents[event.id] = event
-        return event
+        guard mode == .addOnly else { return event }
+        var seen = event
+        seen.calendarID = draft.calendarID
+        return seen
     }
 
     public func update(eventID: String, to content: EventContent) async throws -> CalendarEvent {

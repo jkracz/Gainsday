@@ -37,6 +37,17 @@ public struct CalendarReference: Hashable, Codable, Sendable {
     }
 }
 
+extension CalendarReference {
+    /// Stands for whichever calendar the user's settings send new events to. With
+    /// add-only access iOS doesn't let the app choose a calendar, or even see which
+    /// one this is, so it's the only destination there is.
+    public static let defaultCalendarID = "gainsday.default-calendar"
+    /// The UI shows its own name for it: the title is only a fallback.
+    public static let defaultCalendar = CalendarReference(id: defaultCalendarID, title: "Default Calendar")
+
+    public var isDefaultCalendar: Bool { id == Self.defaultCalendarID }
+}
+
 /// Whether an event blocks the user's time.
 public enum EventAvailability: String, Codable, Sendable {
     case busy

@@ -24,7 +24,10 @@ public protocol CalendarStore: Sendable {
     /// Throws `CalendarStoreError.requiresFullAccess` in add-only mode.
     func event(withID id: String) async throws -> CalendarEvent?
 
-    /// Creates an event and returns it as stored, including its identifier.
+    /// Creates an event and returns it as stored, including its identifier. A draft for
+    /// `CalendarReference.defaultCalendarID` goes to the default calendar. In add-only
+    /// mode the returned event's `calendarID` is the draft's, since the app can't see
+    /// which calendar that was.
     func create(_ draft: EventDraft) async throws -> CalendarEvent
 
     /// Replaces an event's content. Throws `CalendarStoreError.requiresFullAccess` in add-only mode.

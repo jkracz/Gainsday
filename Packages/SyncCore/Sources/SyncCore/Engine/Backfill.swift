@@ -10,7 +10,7 @@ extension SyncEngine {
     /// keep their writes to themselves. It writes nothing, and a commit straight after it
     /// takes the actions it listed. Only a commit is recorded in the activity log.
     func backfill(_ interval: DateInterval, mode: BackfillMode) async throws -> SyncResult {
-        var settings = await settings.load()
+        var settings = try await resolvingDefaultCalendar(in: await settings.load())
         guard let destination = settings.destinationCalendar, let syncStartDate = settings.syncStartDate else {
             return SyncResult()
         }
