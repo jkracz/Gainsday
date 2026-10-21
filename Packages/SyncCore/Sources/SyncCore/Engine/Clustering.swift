@@ -88,15 +88,16 @@ extension SyncEngine {
 
     /// Records the cluster's members in the entry that already holds the workout, so
     /// a copy that arrives late never makes a second event. When the newcomer is
-    /// preferred over every member still in Health, e.g. the Watch's copy arriving
-    /// after Strava's, it becomes the cluster's identity and the event shows its values.
-    func join(_ cluster: WorkoutCluster, to entry: LedgerEntry, composer: EventComposer) async throws -> SyncAction {
+    /// preferred over every allowed member still in Health, e.g. the Watch's copy
+    /// arriving after Strava's, it becomes the cluster's identity and the event shows
+    /// its values.
+    func join(_ cluster: WorkoutCluster, to entry: LedgerEntry, settings: Settings, composer: EventComposer) async throws -> SyncAction {
         var entry = try await correctExternalIdentifier(of: entry)
         let reason: SkipReason = entry.state == .tombstoned ? .tombstoned : .alreadySynced
         guard !cluster.memberIDs.isSubset(of: entry.memberIDs) else {
             return .skip(workoutID: cluster.preferred.id, reason)
         }
-        let earlier = try await healthWorkouts(in: entry)
+        let earlier = settings.splitBySource(try await healthWorkouts(in: entry)).allowed
         entry.memberIDs.formUnion(cluster.memberIDs)
         if cluster.preferred.id != entry.workoutID,
            earlier.allSatisfy({ Workout.isPreferred(cluster.preferred, over: $0) }) {

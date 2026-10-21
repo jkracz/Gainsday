@@ -66,7 +66,7 @@ public struct SyncEngine: Sendable {
             return .skip(workoutID: workout.id, reason)
         }
         if let entry = try await existingEntry(for: cluster) {
-            return try await join(cluster, to: entry, composer: composer)
+            return try await join(cluster, to: entry, settings: settings, composer: composer)
         }
         if let relinked = try await relinkEarlierEvent(for: cluster, in: calendarID, composer: composer) {
             return relinked

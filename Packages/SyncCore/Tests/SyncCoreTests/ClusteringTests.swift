@@ -179,6 +179,27 @@ struct ClusteringTests {
         #expect(entry.covers(watchRun.id) == false)
     }
 
+    @Test("After switching to a Strava-only allowlist, a late Strava copy takes over the Watch's event")
+    func allowedLateCopyTakesOverFromDisallowedOne() async throws {
+        let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let harness = SyncHarness(workouts: [watchRun])
+        let first = try await harness.engine.run(.changes(since: nil))
+        let event = try #require(await harness.calendar.allEvents.first)
+        var settings = SyncHarness.defaultSettings
+        settings.sourceAllowlist = [SyncHarness.strava.bundleIdentifier]
+        await harness.settings.save(settings)
+
+        let stravaRun = SyncHarness.stravaCopy(of: watchRun)
+        await harness.workouts.add(stravaRun)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        let updated = try #require(await harness.calendar.allEvents.first)
+        #expect(await harness.calendar.allEvents.count == 1)
+        #expect(updated.id == event.id)
+        #expect(updated.content.notes?.hasSuffix(stravaRun.shortID) == true)
+        #expect(second.actions == [.update(workoutID: stravaRun.id, eventID: event.id, updated.content)])
+    }
+
     @Test("A Watch copy the allowlist leaves out never replaces a deleted Strava workout's event")
     func disallowedCopyIsNotAReplacement() async throws {
         let watchRun = SyncHarness.run(minutes: 30, minutesAgo: 10)
