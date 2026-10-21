@@ -3,14 +3,18 @@
   "strings" : {
     "Allow Health Access" : {},
     "Calendar" : {},
+    "Calendar Access Is Off" : {},
     "Choose a Calendar" : {},
     "Finished" : {},
     "Full access lets Gainsday see the events it already added, so it never adds a workout twice." : {},
     "Gainsday" : {
       "shouldTranslate" : false
     },
+    "Gainsday can't add your workouts to your calendar. Turn calendar access back on in Settings." : {},
+    "Gainsday can't read your workouts. Turn Health access back on in Settings." : {},
     "Gainsday reads your workouts. It never writes to Health." : {},
     "Health" : {},
+    "Health Access Is Off" : {},
     "Health isn't available on this device, so Gainsday can't read your workouts." : {},
     "Health isn't available on this device." : {},
     "If workouts don't show up, open the Health app, tap your profile, then Apps, and check what Gainsday can read." : {},
@@ -20,7 +24,9 @@
     "Set Up Gainsday" : {},
     "Start Syncing" : {},
     "Syncing…" : {},
+    "The calendar Gainsday adds workouts to was deleted. Open Gainsday to choose another." : {},
     "Turn on full calendar access for Gainsday in Settings, then try again." : {},
+    "Workout Calendar Is Gone" : {},
     "Workouts Since" : {},
     "Workouts you started since %@ are added, as before." : {},
     "Workouts you finish appear in this calendar when you open Gainsday." : {},
