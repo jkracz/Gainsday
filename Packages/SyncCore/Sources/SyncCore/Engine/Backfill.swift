@@ -27,7 +27,11 @@ extension SyncEngine {
             engine.ledger = DryRunLedger(ledger)
         case .commit:
             if settings.syncStartDate != syncStartDate {
-                await self.settings.save(settings)
+                // Only the start date moves, so settings changed meanwhile are kept.
+                let start = interval.start
+                await self.settings.edit { settings in
+                    settings.syncStartDate = min(settings.syncStartDate ?? start, start)
+                }
             }
         }
         let composer = EventComposer(settings: settings, clock: clock)
