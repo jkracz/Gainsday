@@ -38,6 +38,9 @@ final class SyncCoordinator {
     let engine: SyncEngine
     /// Runs passes one at a time, so overlapping triggers create no duplicates.
     let runner: SyncRunner
+    /// How long the app waits for a pass, including the iCloud import wait,
+    /// before showing an error.
+    static let passTimeout: Duration = .seconds(90)
     private static let setupKey = "hasFinishedSetupOnThisDevice"
 
     var isSetUp: Bool {
@@ -109,12 +112,21 @@ final class SyncCoordinator {
 
     /// Runs a catch-up pass from the stored anchor. Does nothing before setup. If a
     /// pass is already running, waits for it and then runs one more, so a workout
-    /// that arrived during it isn't missed.
+    /// that arrived during it isn't missed. Shows an error after `passTimeout`.
     func sync() async {
-        await load()
-        guard isSetUp else { return }
         runningPasses += 1
         defer { runningPasses -= 1 }
+        do {
+            try await withTimeout(Self.passTimeout) { await self.runPass() }
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    /// A pass that runs past its timeout still records its result when it finishes.
+    private func runPass() async {
+        await load()
+        guard isSetUp else { return }
         // After a reinstall, give the ledger a chance to come back from iCloud first.
         _ = await cloudImport.waitForInitialImport()
         do {
@@ -139,10 +151,12 @@ final class SyncCoordinator {
     func undo(_ entry: ActivityLogEntry, choice: ActivityLogEntry.PlannedEventUndoChoice? = nil) async throws {
         runningPasses += 1
         defer { runningPasses -= 1 }
-        if let choice {
-            try await runner.undo(entryID: entry.id, choice: choice)
-        } else {
-            try await runner.undo(entryID: entry.id)
+        try await withTimeout(Self.passTimeout) {
+            if let choice {
+                try await self.runner.undo(entryID: entry.id, choice: choice)
+            } else {
+                try await self.runner.undo(entryID: entry.id)
+            }
         }
         await refreshActivityLog()
     }
