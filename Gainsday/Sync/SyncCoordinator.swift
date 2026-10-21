@@ -84,13 +84,14 @@ final class SyncCoordinator {
         }
     }
 
-    /// Saves the destination and starts syncing workouts from now on. A sync start
-    /// date restored from iCloud is kept, so a reinstall doesn't skip workouts.
-    func finishSetup(destination: CalendarInfo) async {
+    /// Saves the destination and setup's other `choices`, and starts syncing workouts from
+    /// now on. A sync start date restored from iCloud is kept, so a reinstall doesn't skip workouts.
+    func finishSetup(destination: CalendarInfo, choices: @escaping @Sendable (inout Settings) -> Void = { _ in }) async {
         let reference = CalendarReference(id: destination.id, title: destination.title)
         let now = clock.now
         // Waits for settings restored from iCloud, so their start date is the one kept.
         settings = await settingsStore.edit { settings in
+            choices(&settings)
             settings.destinationCalendar = reference
             settings.syncStartDate = settings.syncStartDate ?? now
         }

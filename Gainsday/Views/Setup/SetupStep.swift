@@ -7,6 +7,8 @@ nonisolated enum SetupStep: CaseIterable, Hashable {
     case welcome
     case health
     case calendar
+    /// Whether workouts update the events the user planned. Skipped with add-only access.
+    case matching
     /// Workout types and the 7-day backfill, then Start Syncing.
     case start
 

@@ -105,17 +105,7 @@ extension SyncEngine {
     /// the ledger, for Undo and for when the workout is deleted.
     private func adopt(_ event: CalendarEvent, for cluster: WorkoutCluster, decidedBy decider: MatchDecider, settings: Settings, composer: EventComposer) async throws -> SyncAction {
         let workout = cluster.preferred
-        var content = event.content
-        content.start = workout.start
-        content.end = workout.end
-        if settings.renameMatchedEvents {
-            content.title = composer.content(for: workout).title
-        }
-        content.notes = WorkoutSection.replacing(
-            in: event.content.notes,
-            with: composer.workoutSectionBody(for: workout, planned: event.content),
-            workoutID: workout.id
-        )
+        let content = composer.adoptedContent(updating: event.content, with: workout)
         let updated = try await calendar.update(eventID: event.id, to: content)
         let now = clock.now
         do {
@@ -144,6 +134,23 @@ extension SyncEngine {
 }
 
 extension EventComposer {
+    /// A planned event moved to the workout's times, with the workout section in its
+    /// notes. The user's title and notes are kept, unless renaming is on.
+    func adoptedContent(updating planned: EventContent, with workout: Workout) -> EventContent {
+        var content = planned
+        content.start = workout.start
+        content.end = workout.end
+        if settings.renameMatchedEvents {
+            content.title = self.content(for: workout).title
+        }
+        content.notes = WorkoutSection.replacing(
+            in: planned.notes,
+            with: workoutSectionBody(for: workout, planned: planned),
+            workoutID: workout.id
+        )
+        return content
+    }
+
     /// What goes between an adopted event's section markers: the rendered notes template,
     /// then the times the user planned, e.g. "Planned: 3:00 – 4:00 PM". The footer is
     /// never added, since the section's end marker does its job.
