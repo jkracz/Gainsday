@@ -7,7 +7,7 @@ nonisolated enum SetupStep: CaseIterable, Hashable {
     case welcome
     case health
     case calendar
-    /// Workout types, then Start Syncing.
+    /// Workout types and the 7-day backfill, then Start Syncing.
     case start
 
     /// The step after this one, or nil for the last.

@@ -11,6 +11,8 @@ final class SetupModel {
     var calendars: [CalendarInfo]?
     var selectedCalendarID: String?
     var calendarAccessDenied = false
+    /// Whether Start Syncing also adds the past week's workouts.
+    var addsPastWeek = true
     var isStarting = false
     var errorMessage: String?
 
@@ -67,6 +69,7 @@ final class SetupModel {
         guard let selectedCalendar else { return }
         isStarting = true
         await coordinator.finishSetup(destination: selectedCalendar)
+        if addsPastWeek { await coordinator.backfillPastWeek() }
         isStarting = false
     }
 }

@@ -3,7 +3,57 @@
   "strings" : {
     "%@ · Sample" : {},
     "%lld on" : {},
+    "Activity" : {},
+    "Add %lld Events" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Add %lld Event"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Add %lld Events"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Add Event Back" : {},
+    "Add Past Workouts" : {},
+    "Add the Past 7 Days" : {},
+    "Add the event back?" : {},
+    "Added %lld events." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Added %lld event."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Added %lld events."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Added by Gainsday. It isn't part of your template." : {},
+    "Added to your calendar" : {},
     "Adds events to one calendar" : {},
     "Allow Calendar Access" : {},
     "Anyone who can see the calendar you choose can see your workouts, so pick one only you can see." : {},
@@ -12,6 +62,7 @@
     "Choose the calendar Gainsday adds your workouts to. It never creates calendars." : {},
     "Choose which workouts to add. You can change this later in Settings." : {},
     "Continue" : {},
+    "Couldn't Undo" : {},
     "Cycling" : {},
     "Detailed" : {},
     "Distance, energy, heart rate and elevation, for the event's notes." : {},
@@ -22,16 +73,21 @@
     "Everything happens on this iPhone. Your settings and the list of events it added are backed up to your own iCloud." : {},
     "Filters" : {},
     "Finished" : {},
+    "Found in your calendar and linked again, so it isn't added twice" : {},
+    "From" : {},
     "Full access lets Gainsday see the events it already added, so it never adds a workout twice." : {},
     "Functional Strength Training" : {},
     "Gainsday" : {
       "shouldTranslate" : false
     },
+    "Gainsday adds the event again as it was, and won't change it again." : {},
     "Gainsday adds the last line itself, so it can recognise its events. It isn't part of your template." : {},
     "Gainsday can't add your workouts to your calendar. Turn calendar access back on in Settings." : {},
     "Gainsday can't read your workouts. Turn Health access back on in Settings." : {},
     "Gainsday copies your workouts from Apple Health into a calendar you choose." : {},
+    "Gainsday deletes the event and won't add this workout again." : {},
     "Gainsday reads your workouts. It never writes to Health." : {},
+    "Gainsday restores the event's earlier title, time and notes, and won't change it again." : {},
     "HIIT" : {},
     "Health" : {},
     "Health Access Is Off" : {},
@@ -40,28 +96,43 @@
     "Health isn't available on this device." : {},
     "Hiking" : {},
     "If workouts don't show up, open the Health app, tap your profile, then Apps, and check what Gainsday can read." : {},
+    "If you let Gainsday read only the past 30 days of Health data, older workouts can't be added." : {},
     "Last Sync" : {},
+    "Left alone from now on because you edited the event" : {},
     "Make one in the Calendar app, such as “Workouts”, and don't share it. Then you can hide or share your workouts on their own." : {},
     "Minimal" : {},
     "Minimum Duration" : {},
     "New Events" : {},
     "Next, Gainsday asks for access to Health and your calendar." : {},
+    "No Activity Yet" : {},
     "No Minimum" : {},
     "No server, no account" : {},
     "None" : {},
+    "Not changed because Gainsday has add-only calendar access" : {},
     "Notes" : {},
+    "OK" : {},
     "One event per workout, in the calendar you choose. It only changes events it added itself." : {},
     "Other" : {},
     "Placeholders" : {},
     "Preview" : {},
+    "Put the event back as it was?" : {},
     "Reads your workouts from Health" : {},
     "Ready to Sync" : {},
+    "Remove Event" : {},
+    "Remove this event?" : {},
+    "Removed because the workout was deleted in Health" : {},
     "Reset to Default" : {},
+    "Restore Event" : {},
     "Rowing" : {},
     "Runner" : {},
     "Running" : {},
     "Settings" : {},
     "Shorter workouts aren't added to your calendar." : {},
+    "Skipped because it started before syncing was set up" : {},
+    "Skipped because it was recorded by an app you didn't allow" : {},
+    "Skipped because it's already in your calendar" : {},
+    "Skipped because it's shorter than the minimum duration" : {},
+    "Skipped because this workout type is turned off" : {},
     "Start From" : {},
     "Start Syncing" : {},
     "Strength Training" : {},
@@ -69,25 +140,58 @@
     "Syncing…" : {},
     "Tap a placeholder to add it at the cursor. Notes lines and title parts with a missing value are left out." : {},
     "The calendar Gainsday adds workouts to was deleted. Open Gainsday to choose another." : {},
+    "The event may have changed or been deleted. Check your calendar, then try again." : {},
     "The type, the time and stats such as distance, energy and heart rate. It never writes to Health." : {},
+    "This will create %lld events." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This will create %lld event."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This will create %lld events."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Title" : {},
+    "To" : {},
     "Turn on full calendar access for Gainsday in Settings, then try again." : {},
     "Turning a type on adds workouts you finish from now on." : {},
+    "Undo" : {},
+    "Undo requires full calendar access." : {},
+    "Undone" : {},
+    "Updated because the workout changed in Health" : {},
     "Use a calendar just for workouts" : {},
+    "Waiting for your review" : {},
     "Walking" : {},
     "Welcome to Gainsday" : {},
     "When each workout started and ended, and its type." : {},
+    "Won't be added again because you deleted its event" : {},
     "Workout" : {},
     "Workout Calendar Is Gone" : {},
     "Workout Types" : {},
     "Workout stats" : {},
     "Workouts" : {},
+    "Workouts Gainsday adds, updates or skips appear here." : {},
     "Workouts Since" : {},
+    "Workouts already in your calendar, and those your filters leave out, aren't added again." : {},
     "Workouts you finish appear in this calendar when you open Gainsday." : {},
     "Workouts you start from now on are added. Earlier workouts are left out." : {},
     "Workouts you started since %@ are added, as before." : {},
     "Yoga" : {},
-    "Your Calendars" : {}
+    "Your Calendars" : {},
+    "Your workouts from the past 7 days are added too, so your calendar isn't empty. You can add others later." : {}
   },
   "version" : "1.0"
 }

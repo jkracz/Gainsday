@@ -16,18 +16,22 @@ final class SyncCoordinator {
     /// Health and calendar permissions don't survive a reinstall, though settings
     /// restored from iCloud do, so setup runs once on every install.
     private(set) var hasFinishedSetupOnThisDevice = UserDefaults.standard.bool(forKey: setupKey)
-    private(set) var isSyncing = false
-    private(set) var lastPass: Pass?
-    private(set) var lastError: String?
+    /// Set while a pass or backfill runs, so they never overlap and create duplicates.
+    var isSyncing = false
+    var lastPass: Pass?
+    var lastError: String?
+    /// The activity log, newest first.
+    private(set) var activityLog: [ActivityLogEntry] = []
 
     let health: HealthKitWorkoutSource
     let calendar: EventKitCalendarStore
     private let settingsStore: CloudSettingsStore
     private let anchors: AnchorStore
-    private let cloudImport = CloudImportMonitor()
-    private let clock = SystemClock()
+    let cloudImport = CloudImportMonitor()
+    private let activityLogStore: FileActivityLogStore
+    let clock = SystemClock()
     private let notifier = LocalNotifier()
-    private let engine: SyncEngine
+    let engine: SyncEngine
     private static let setupKey = "hasFinishedSetupOnThisDevice"
 
     var isSetUp: Bool {
@@ -39,6 +43,7 @@ final class SyncCoordinator {
         calendar = EventKitCalendarStore()
         settingsStore = CloudSettingsStore()
         anchors = AnchorStore()
+        activityLogStore = FileActivityLogStore()
         engine = SyncEngine(
             workouts: health,
             calendar: calendar,
@@ -46,13 +51,15 @@ final class SyncCoordinator {
             settings: settingsStore,
             judge: UnavailableMatchJudge(),
             clock: clock,
-            notifier: notifier
+            notifier: notifier,
+            activityLog: activityLogStore
         )
         UNUserNotificationCenter.current().delegate = notifier
     }
 
     func load() async {
         settings = await settingsStore.load()
+        await refreshActivityLog()
         // The setup flag can come back from a device backup, and access can be revoked
         // in Settings. Either way, setup has to ask again before syncing can work.
         if hasFinishedSetupOnThisDevice, await calendar.accessMode() == .none {
@@ -117,6 +124,20 @@ final class SyncCoordinator {
         } catch {
             lastError = error.localizedDescription
         }
+        await refreshActivityLog()
+    }
+
+    /// Undoes an activity log entry. It counts as a pass, so it never runs alongside one.
+    func undo(_ entry: ActivityLogEntry) async throws {
+        guard !isSyncing else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        try await engine.undo(entryID: entry.id)
+        await refreshActivityLog()
+    }
+
+    func refreshActivityLog() async {
+        activityLog = (try? await activityLogStore.load()) ?? []
     }
 
     private func forgetSetup() {
