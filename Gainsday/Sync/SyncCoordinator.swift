@@ -73,19 +73,23 @@ final class SyncCoordinator {
     /// Saves the destination and starts syncing workouts from now on. A sync start
     /// date restored from iCloud is kept, so a reinstall doesn't skip workouts.
     func finishSetup(destination: CalendarInfo) async {
-        settings.destinationCalendar = CalendarReference(id: destination.id, title: destination.title)
-        settings.syncStartDate = settings.syncStartDate ?? clock.now
-        await settingsStore.save(settings)
+        let reference = CalendarReference(id: destination.id, title: destination.title)
+        let now = clock.now
+        // Waits for settings restored from iCloud, so their start date is the one kept.
+        settings = await settingsStore.edit { settings in
+            settings.destinationCalendar = reference
+            settings.syncStartDate = settings.syncStartDate ?? now
+        }
         UserDefaults.standard.set(true, forKey: Self.setupKey)
         hasFinishedSetupOnThisDevice = true
         await notifier.requestAuthorization()
         await sync()
     }
 
-    /// Changes settings now and backs them up to iCloud.
-    func updateSettings(_ change: (inout Settings) -> Void) {
+    /// Changes settings now and backs them up to iCloud, on top of any still being restored.
+    func updateSettings(_ change: @escaping @Sendable (inout Settings) -> Void) {
         change(&settings)
-        Task { await settingsStore.save(settings) }
+        Task { await settingsStore.edit(change) }
     }
 
     /// Runs a catch-up pass from the stored anchor. Does nothing before setup, or
