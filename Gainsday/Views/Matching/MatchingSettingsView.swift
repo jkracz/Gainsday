@@ -10,7 +10,10 @@ struct MatchingSettingsView: View {
         Form {
             Section {
                 RequiresFullAccess {
-                    Toggle("Match Planned Workouts", isOn: matchingEnabled)
+                    // Shows #21's explanation the first time matching is turned on.
+                    MatchingToggle {
+                        Text("Match Planned Workouts")
+                    }
                 }
             } footer: {
                 Text("When a workout matches an event you planned, such as \"Run with Sam\", Gainsday uses that event instead of adding another.")
@@ -85,20 +88,6 @@ struct MatchingSettingsView: View {
         case .createSeparateEvent:
             "Planned events are never changed. The workout is added as its own event."
         }
-    }
-
-    private var matchingEnabled: Binding<Bool> {
-        Binding {
-            coordinator.settings.matchingEnabled
-        } set: { isOn in
-            setMatchingEnabled(isOn)
-        }
-    }
-
-    /// Turns matching on or off. #21 hooks in here to show its opt-in explanation the
-    /// first time matching is turned on.
-    private func setMatchingEnabled(_ isOn: Bool) {
-        coordinator.updateSettings { $0.matchingEnabled = isOn }
     }
 
     private var matchMode: Binding<MatchMode> {

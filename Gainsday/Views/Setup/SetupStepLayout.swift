@@ -40,7 +40,7 @@ struct SetupStepLayout<Content: View>: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
+        .safeAreaBar(edge: .bottom) {
             Button {
                 Task { await action() }
             } label: {

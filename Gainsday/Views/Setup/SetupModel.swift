@@ -14,6 +14,9 @@ final class SetupModel {
     /// The user chose add-only access, so the system chooser picks the calendar.
     var isAddOnly = false
     var isChoosingAddOnlyCalendar = false
+    /// Whether workouts update matching planned events. Nil until the matching step's
+    /// Continue, and when that step is skipped, which leaves the setting as it is.
+    var enablesMatching: Bool?
     /// Whether Start Syncing also adds the past week's workouts.
     var addsPastWeek = true
     var isStarting = false
@@ -25,9 +28,18 @@ final class SetupModel {
 
     func showStep(after step: SetupStep) {
         errorMessage = nil
-        if let next = step.next {
+        var next = step.next
+        while let skipped = next, !isShown(skipped) {
+            next = skipped.next
+        }
+        if let next {
             path.append(next)
         }
+    }
+
+    /// Matching needs to read the user's events, so add-only access skips its step.
+    private func isShown(_ step: SetupStep) -> Bool {
+        step != .matching || !isAddOnly
     }
 
     /// Shows Health's permission sheet, then turns on background delivery, which
@@ -91,10 +103,24 @@ final class SetupModel {
         selectedCalendarID = calendars?.first { $0.id == restoredID }?.id
     }
 
+    /// The matching answer to show: the user's, or else the setting, which is off on a fresh install.
+    func showsMatchingOn(_ settings: Settings) -> Bool {
+        enablesMatching ?? settings.matchingEnabled
+    }
+
+    /// Setup's choices, as an edit for `finishSetup` to save along with the destination.
+    var choices: @Sendable (inout Settings) -> Void {
+        let enablesMatching = enablesMatching
+        return { settings in
+            if let enablesMatching { settings.matchingEnabled = enablesMatching }
+        }
+    }
+
     func startSyncing(_ coordinator: SyncCoordinator) async {
         guard let selectedCalendar else { return }
         isStarting = true
-        await coordinator.finishSetup(destination: selectedCalendar)
+        await coordinator.finishSetup(destination: selectedCalendar, choices: choices)
+        if enablesMatching == true { MatchingExplanation.hasTurnedOnMatching = true }
         if addsPastWeek { await coordinator.backfillPastWeek() }
         isStarting = false
     }

@@ -33,6 +33,7 @@ struct SetupView: View {
         case .welcome: WelcomeStep()
         case .health: HealthStep()
         case .calendar: CalendarStep()
+        case .matching: MatchingStep()
         case .start: StartStep()
         }
     }
