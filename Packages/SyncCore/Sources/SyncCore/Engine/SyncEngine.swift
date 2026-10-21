@@ -9,6 +9,7 @@ public struct SyncEngine: Sendable {
     public var settings: any SettingsStore
     public var judge: any MatchJudge
     public var clock: any Clock
+    public var notifier: any ProblemNotifier
     public var activityLog: any ActivityLogStore
 
     public init(
@@ -18,6 +19,7 @@ public struct SyncEngine: Sendable {
         settings: any SettingsStore,
         judge: any MatchJudge,
         clock: any Clock,
+        notifier: any ProblemNotifier,
         activityLog: any ActivityLogStore
     ) {
         self.workouts = workouts
@@ -26,6 +28,7 @@ public struct SyncEngine: Sendable {
         self.settings = settings
         self.judge = judge
         self.clock = clock
+        self.notifier = notifier
         self.activityLog = activityLog
     }
 
@@ -40,17 +43,18 @@ public struct SyncEngine: Sendable {
         switch trigger {
         case .changes(let anchor):
             let settings = await settings.load()
-            guard let destination = settings.destinationCalendar, let syncStartDate = settings.syncStartDate else {
+            guard let destination = settings.destinationCalendar, settings.syncStartDate != nil else {
                 // Setup isn't finished: leave Health unread so the anchor doesn't move.
                 return SyncResult()
             }
-            let changes = try await workouts.changes(since: anchor)
+            try await checkCalendar(destination)
+            let changes = try await readChanges(since: anchor)
             let recorder = try await ActivityRecorder(engine: self, added: changes.added, deletedIDs: changes.deletedIDs)
-            let composer = EventComposer(locale: clock.locale, footerEnabled: settings.footerEnabled)
-            let followed = try await followDeletions(in: changes, composer: composer)
+            let composer = EventComposer(settings: settings, clock: clock)
+            let followed = try await followDeletions(in: changes, settings: settings, composer: composer)
             var actions = followed.actions
             for workout in followed.remaining.sorted(by: { $0.start < $1.start }) {
-                actions.append(try await sync(workout, to: destination.id, since: syncStartDate, composer: composer))
+                actions.append(try await sync(workout, to: destination.id, settings: settings, composer: composer))
             }
             return await recorder.record(SyncResult(actions: actions, nextAnchor: changes.anchor))
         case .backfill(let interval, _):
@@ -59,19 +63,20 @@ public struct SyncEngine: Sendable {
         }
     }
 
-    private func sync(_ workout: Workout, to calendarID: String, since syncStartDate: Date, composer: EventComposer) async throws -> SyncAction {
-        guard workout.start >= syncStartDate else {
-            return .skip(workoutID: workout.id, .beforeSyncStartDate)
+    private func sync(_ workout: Workout, to calendarID: String, settings: Settings, composer: EventComposer) async throws -> SyncAction {
+        if let reason = settings.skipReason(for: workout) {
+            return .skip(workoutID: workout.id, reason)
         }
-        let entries = try await ledger.entries(forWorkout: workout.id)
-        if !entries.isEmpty {
-            // Duplicate entries can arrive from iCloud; any live one means the workout is synced.
-            let isTombstoned = entries.allSatisfy { $0.state == .tombstoned }
-            return .skip(workoutID: workout.id, isTombstoned ? .tombstoned : .alreadySynced)
+        if let entry = try await resolvedEntry(forWorkout: workout.id) {
+            try await correctExternalIdentifier(of: entry)
+            return .skip(workoutID: workout.id, entry.state == .tombstoned ? .tombstoned : .alreadySynced)
+        }
+        if let relinked = try await relinkEarlierEvent(for: workout, in: calendarID, composer: composer) {
+            return relinked
         }
 
         let draft = EventDraft(calendarID: calendarID, content: composer.content(for: workout), availability: .free)
-        let event = try await calendar.create(draft)
+        let event = try await createEvent(draft)
         let now = clock.now
         do {
             try await ledger.save(LedgerEntry(

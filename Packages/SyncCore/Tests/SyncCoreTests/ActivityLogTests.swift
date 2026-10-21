@@ -162,10 +162,11 @@ struct ActivityLogTests {
         await harness.workouts.delete(workout.id)
         let second = try await harness.engine.run(.changes(since: first.nextAnchor))
 
+        let event = try #require(await harness.calendar.allEvents.first)
         let entry = try #require(await harness.activityLog.entries.first)
         #expect(second.actions == [.skip(workoutID: workout.id, .requiresFullAccess)])
         #expect(entry.action == second.actions.first)
-        #expect(entry.title == "🏃 Running")
+        #expect(entry.title == event.content.title)
         #expect(entry.canUndo == false)
         await #expect(throws: UndoError.notUndoable) {
             try await harness.engine.undo(entryID: entry.id)
@@ -201,5 +202,22 @@ struct ActivityLogTests {
         #expect(await harness.calendar.allEvents.isEmpty)
         #expect(await harness.ledger.allEntries.map(\.state) == [.tombstoned])
         #expect(await harness.ledger.allEntries.first?.workoutID == workout.id)
+    }
+
+    @Test("An event re-linked after a reinstall is logged with its title, and can't be undone")
+    func relinkIsLogged() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        var existing = try await SyncHarness.eventLeftByEarlierInstall(for: workout)
+        existing.content.title = "Morning run"
+        await harness.calendar.put(existing)
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        let entry = try #require(await harness.activityLog.entries.first)
+        #expect(entry.action == result.actions.first)
+        #expect(entry.title == "Morning run")
+        #expect(entry.eventID == existing.id)
+        #expect(entry.canUndo == false)
     }
 }

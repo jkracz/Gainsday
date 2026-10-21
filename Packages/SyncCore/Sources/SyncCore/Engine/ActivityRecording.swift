@@ -68,6 +68,10 @@ struct ActivityRecorder {
             entry.eventID = try? await engine.ledger.entries(forWorkout: workoutID)
                 .compactMap(\.eventExternalIdentifier).first
             entry.undo = .removeCreatedEvent
+        case .relink(let workoutID, _):
+            if let title = try? await engine.ledger.entries(forWorkout: workoutID).compactMap(\.written?.title).first {
+                entry.title = title
+            }
         case .update(_, _, let content):
             entry.title = content.title
             entry.undo = previous?.written.map { .restoreEvent($0) }
@@ -85,7 +89,7 @@ struct ActivityRecorder {
 private extension SyncAction {
     var eventID: String? {
         switch self {
-        case .update(_, let eventID, _), .delete(_, let eventID), .release(_, let eventID): eventID
+        case .update(_, let eventID, _), .delete(_, let eventID), .release(_, let eventID), .relink(_, let eventID): eventID
         case .create, .skip, .holdForReview: nil
         }
     }

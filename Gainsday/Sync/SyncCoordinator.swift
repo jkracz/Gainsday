@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SyncCore
+import UserNotifications
 
 /// Wires the sync engine to the real adapters, runs passes and keeps the state the UI shows.
 @Observable
@@ -25,8 +26,10 @@ final class SyncCoordinator {
     let calendar: EventKitCalendarStore
     private let settingsStore: CloudSettingsStore
     private let anchors: AnchorStore
+    private let cloudImport = CloudImportMonitor()
     private let activityLogStore: FileActivityLogStore
     private let clock = SystemClock()
+    private let notifier = LocalNotifier()
     private let engine: SyncEngine
     private static let setupKey = "hasFinishedSetupOnThisDevice"
 
@@ -47,8 +50,10 @@ final class SyncCoordinator {
             settings: settingsStore,
             judge: UnavailableMatchJudge(),
             clock: clock,
+            notifier: notifier,
             activityLog: activityLogStore
         )
+        UNUserNotificationCenter.current().delegate = notifier
     }
 
     func load() async {
@@ -57,8 +62,8 @@ final class SyncCoordinator {
         // The setup flag can come back from a device backup, and access can be revoked
         // in Settings. Either way, setup has to ask again before syncing can work.
         if hasFinishedSetupOnThisDevice, await calendar.accessMode() == .none {
-            UserDefaults.standard.removeObject(forKey: Self.setupKey)
-            hasFinishedSetupOnThisDevice = false
+            await engine.report(.calendarAccessRevoked)
+            forgetSetup()
         }
         hasLoaded = true
     }
@@ -79,7 +84,14 @@ final class SyncCoordinator {
         await settingsStore.save(settings)
         UserDefaults.standard.set(true, forKey: Self.setupKey)
         hasFinishedSetupOnThisDevice = true
+        await notifier.requestAuthorization()
         await sync()
+    }
+
+    /// Changes settings now and backs them up to iCloud.
+    func updateSettings(_ change: (inout Settings) -> Void) {
+        change(&settings)
+        Task { await settingsStore.save(settings) }
     }
 
     /// Runs a catch-up pass from the stored anchor. Does nothing before setup, or
@@ -91,6 +103,8 @@ final class SyncCoordinator {
 
         await load()
         guard isSetUp else { return }
+        // After a reinstall, give the ledger a chance to come back from iCloud first.
+        _ = await cloudImport.waitForInitialImport()
         do {
             let result = try await engine.run(.changes(since: anchors.load()))
             if let anchor = result.nextAnchor {
@@ -99,6 +113,9 @@ final class SyncCoordinator {
             let createdCount = result.actions.count { if case .create = $0 { true } else { false } }
             lastPass = Pass(finishedAt: clock.now, createdCount: createdCount)
             lastError = nil
+        } catch CalendarStoreError.calendarNotFound(let id) where id == settings.destinationCalendar?.id {
+            // The destination was deleted. Setup lets the user choose another.
+            forgetSetup()
         } catch {
             lastError = error.localizedDescription
         }
@@ -116,5 +133,10 @@ final class SyncCoordinator {
 
     private func refreshActivityLog() async {
         activityLog = (try? await activityLogStore.load()) ?? []
+    }
+
+    private func forgetSetup() {
+        UserDefaults.standard.removeObject(forKey: Self.setupKey)
+        hasFinishedSetupOnThisDevice = false
     }
 }

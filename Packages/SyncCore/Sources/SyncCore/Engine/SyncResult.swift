@@ -34,6 +34,9 @@ public enum SyncAction: Hashable, Codable, Sendable {
     case skip(workoutID: UUID, SkipReason)
     case release(workoutID: UUID, eventID: String)
     case holdForReview(workoutID: UUID)
+    /// An event the app wrote earlier, found in the calendar and recorded in the ledger
+    /// again instead of being duplicated, e.g. after a reinstall.
+    case relink(workoutID: UUID, eventID: String)
 }
 
 public struct SyncResult: Hashable, Sendable {

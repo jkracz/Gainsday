@@ -10,6 +10,7 @@ extension SyncAction {
         case .delete: "Removed because the workout was deleted in Health"
         case .release: "Left alone from now on because you edited the event"
         case .holdForReview: "Waiting for your review"
+        case .relink: "Found in your calendar and linked again, so it isn't added twice"
         case .skip(_, let reason): reason.logDescription
         }
     }

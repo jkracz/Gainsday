@@ -56,10 +56,16 @@ struct SetupView: View {
                 }
 
                 Section {
+                    WorkoutTypesLink()
+                } footer: {
+                    Text("You can change these later in Settings.")
+                }
+
+                Section {
                     Button("Start Syncing") {
                         Task { await startSyncing() }
                     }
-                    .disabled(!healthRequested || selectedCalendar == nil || isStarting)
+                    .disabled(!healthRequested || selectedCalendar == nil || coordinator.settings.enabledTypes.isEmpty || isStarting)
                 } footer: {
                     if let restored = coordinator.settings.syncStartDate {
                         Text("Workouts you started since \(restored, format: .dateTime.day().month().year()) are added, as before.")

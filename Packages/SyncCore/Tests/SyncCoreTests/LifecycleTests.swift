@@ -50,6 +50,33 @@ struct LifecycleTests {
         #expect(entry.createdAt == SyncHarness.now)
     }
 
+    @Test("A replacement the filters leave out keeps the event as it is, and a later delete still removes it")
+    func ineligibleReplacementKeepsEvent() async throws {
+        let original = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let harness = SyncHarness(workouts: [original])
+        let first = try await harness.engine.run(.changes(since: nil))
+        let event = try #require(await harness.calendar.allEvents.first)
+
+        let shortReplacement = SyncHarness.run(minutes: 5, minutesAgo: 15)
+        await harness.workouts.delete(original.id)
+        await harness.workouts.add(shortReplacement)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions == [.skip(workoutID: shortReplacement.id, .tooShort)])
+        #expect(await harness.calendar.allEvents == [event])
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(await harness.ledger.allEntries.count == 1)
+        #expect(entry.state == .owned)
+        #expect(entry.covers(shortReplacement.id))
+        #expect(entry.covers(original.id) == false)
+
+        await harness.workouts.delete(shortReplacement.id)
+        let third = try await harness.engine.run(.changes(since: second.nextAnchor))
+
+        #expect(third.actions == [.delete(workoutID: shortReplacement.id, eventID: event.id)])
+        #expect(await harness.calendar.allEvents.isEmpty)
+    }
+
     @Test("A deleted run and an overlapping ride added in the same pass are a delete and a create, not a replacement")
     func differentTypeIsNotAReplacement() async throws {
         let run = SyncHarness.run()
@@ -156,6 +183,22 @@ struct LifecycleTests {
         #expect(second.actions == [.skip(workoutID: workout.id, .tombstoned)])
         #expect(await harness.calendar.allEvents.isEmpty)
         #expect(await harness.ledger.allEntries.map(\.state) == [.tombstoned])
+    }
+
+    @Test("Deleting a workout in Health after a server sync changed its event's identifier still deletes the event, not tombstones it")
+    func healthDeleteAfterIdentifierChange() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        let first = try await harness.engine.run(.changes(since: nil))
+        let event = try #require(await harness.calendar.allEvents.first)
+        await harness.calendar.changeIdentifier(of: event.id, to: "after-server-sync")
+
+        await harness.workouts.delete(workout.id)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions == [.delete(workoutID: workout.id, eventID: "after-server-sync")])
+        #expect(await harness.calendar.allEvents.isEmpty)
+        #expect(await harness.ledger.allEntries.isEmpty)
     }
 
     @Test("With add-only access, a Health delete leaves the event, reports that it needs full access, and finishes the pass")
