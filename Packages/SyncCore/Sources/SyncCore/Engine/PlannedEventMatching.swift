@@ -90,11 +90,12 @@ extension SyncEngine {
             .sorted { ($0.content.start, $0.id) < ($1.content.start, $1.id) }
     }
 
-    /// The calendars the user lets the app search, or by default the destination plus
-    /// the default calendar. Only calendars the app can write to are searched.
+    /// The calendars the user lets the app search, or, when they haven't picked any, the
+    /// destination plus the default calendar. Only calendars the app can write to are searched.
     private func searchCalendarIDs(destination calendarID: String, settings: Settings) async throws -> Set<String> {
-        var searched = Set(settings.searchCalendars?.map(\.id) ?? [calendarID])
-        if settings.searchCalendars == nil, let defaultID = await calendar.defaultCalendarID() {
+        let picked = settings.searchCalendars.flatMap { $0.isEmpty ? nil : $0 }
+        var searched = Set(picked?.map(\.id) ?? [calendarID])
+        if picked == nil, let defaultID = await calendar.defaultCalendarID() {
             searched.insert(defaultID)
         }
         return searched.intersection(try await calendar.writableCalendars().map(\.id))
@@ -103,7 +104,7 @@ extension SyncEngine {
     /// Moves the planned event to the workout's times and puts the workout section in its
     /// notes, keeping the user's title and notes. The event before the update is kept in
     /// the ledger, for Undo and for when the workout is deleted.
-    private func adopt(_ event: CalendarEvent, for cluster: WorkoutCluster, decidedBy decider: MatchDecider, settings: Settings, composer: EventComposer) async throws -> SyncAction {
+    func adopt(_ event: CalendarEvent, for cluster: WorkoutCluster, decidedBy decider: MatchDecider, settings: Settings, composer: EventComposer) async throws -> SyncAction {
         let workout = cluster.preferred
         let content = composer.adoptedContent(updating: event.content, with: workout)
         let updated = try await calendar.update(eventID: event.id, to: content)

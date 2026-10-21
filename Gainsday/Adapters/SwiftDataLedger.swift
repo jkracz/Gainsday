@@ -70,8 +70,19 @@ nonisolated final class LedgerRecord {
 }
 
 /// The ledger, stored with SwiftData in the user's private iCloud database.
-@ModelActor
+///
+/// A plain actor rather than `@ModelActor`: SwiftData's model executor runs work on
+/// the caller's thread, so a main-actor caller would fetch and save on the main
+/// thread (issue #26). This actor's own executor never uses the main thread.
 actor SwiftDataLedger: Ledger {
+    let modelContainer: ModelContainer
+    /// Made on first use, on this actor, so it isn't tied to the main thread.
+    private lazy var modelContext = ModelContext(modelContainer)
+
+    init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+    }
+
     /// The iCloud-backed container, using the first iCloud container in the entitlements.
     static func makeContainer(inMemory: Bool = false) throws -> ModelContainer {
         let configuration = inMemory
@@ -115,6 +126,11 @@ actor SwiftDataLedger: Ledger {
         guard let record = try record(withID: entryID) else { return }
         modelContext.delete(record)
         try modelContext.save()
+    }
+
+    /// Whether ledger work is running on the main thread. For tests (issue #26).
+    func isOnMainThread() -> Bool {
+        pthread_main_np() != 0
     }
 
     private func record(withID entryID: UUID) throws -> LedgerRecord? {

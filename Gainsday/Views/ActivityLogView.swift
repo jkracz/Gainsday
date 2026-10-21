@@ -6,6 +6,8 @@ struct ActivityLogView: View {
     @Environment(SyncCoordinator.self) private var coordinator
     @State private var confirming: ActivityLogEntry?
     @State private var undoFailed = false
+    @State private var matching: ActivityLogEntry?
+    @State private var addFailed = false
 
     private var canUndo: Bool { coordinator.hasFullCalendarAccess && !coordinator.isSyncing }
 
@@ -22,6 +24,26 @@ struct ActivityLogView: View {
                     ActivityLogRow(entry: entry, canUndo: canUndo) {
                         confirming = entry
                     }
+                    .contextMenu {
+                        if entry.canMatchToEvent {
+                            RequiresFullAccess {
+                                Button("Match to an Event…", systemImage: "calendar.badge.checkmark") { matching = entry }
+                                    .disabled(coordinator.isSyncing)
+                                if entry.canAddAsSeparateEvent {
+                                    Button("Add as Separate Event", systemImage: "calendar.badge.plus") {
+                                        Task { await addSeparateEvent(entry) }
+                                    }
+                                    .disabled(coordinator.isSyncing)
+                                }
+                            }
+                        }
+                    }
+                }
+            } footer: {
+                if coordinator.activityLog.contains(where: \.isAwaitingReview) {
+                    Text("Touch and hold a workout waiting for your review to match it to your plan or add it as its own event.")
+                } else if coordinator.activityLog.contains(where: \.canMatchToEvent) {
+                    Text("If you planned a workout in your calendar but it got its own event, touch and hold the workout to match it to your plan.")
                 }
             }
         }
@@ -35,6 +57,9 @@ struct ActivityLogView: View {
             }
         }
         .navigationTitle("Activity")
+        .sheet(item: $matching) { entry in
+            MatchEventView(entry: entry)
+        }
         .confirmationDialog(
             confirming?.undo.map { Text($0.confirmationTitle) } ?? Text(verbatim: ""),
             isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
@@ -61,10 +86,23 @@ struct ActivityLogView: View {
                 Text(kind.confirmationMessage)
             }
         }
+        .alert("Couldn't Add the Event", isPresented: $addFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The workout may have changed in Health. Try again later.")
+        }
         .alert("Couldn't Undo", isPresented: $undoFailed) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("The event may have changed or been deleted. Check your calendar, then try again.")
+        }
+    }
+
+    private func addSeparateEvent(_ entry: ActivityLogEntry) async {
+        do {
+            try await coordinator.addSeparateEvent(for: entry)
+        } catch {
+            addFailed = true
         }
     }
 
@@ -100,6 +138,10 @@ private struct ActivityLogRow: View {
             Spacer()
             if entry.undoneAt != nil {
                 Text("Undone")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else if entry.reviewedAt != nil {
+                Text("Reviewed")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else if entry.canUndo {
