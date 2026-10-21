@@ -68,7 +68,13 @@ public struct SyncEngine: Sendable {
         }
     }
 
-    func sync(_ cluster: WorkoutCluster, to calendarID: String, settings: Settings, composer: EventComposer) async throws -> SyncAction {
+    func sync(
+        _ cluster: WorkoutCluster,
+        to calendarID: String,
+        settings: Settings,
+        composer: EventComposer,
+        search: PlannedEventSearch = PlannedEventSearch()
+    ) async throws -> SyncAction {
         let workout = cluster.preferred
         if let reason = settings.skipReason(for: workout) {
             return .skip(workoutID: workout.id, reason)
@@ -79,7 +85,7 @@ public struct SyncEngine: Sendable {
         if let relinked = try await relinkEarlierEvent(for: cluster, in: calendarID, composer: composer) {
             return relinked
         }
-        if let matched = try await matchPlannedEvent(for: cluster, destination: calendarID, settings: settings, composer: composer) {
+        if let matched = try await matchPlannedEvent(for: cluster, destination: calendarID, settings: settings, composer: composer, search: search) {
             return matched
         }
 

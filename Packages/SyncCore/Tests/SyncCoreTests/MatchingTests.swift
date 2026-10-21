@@ -233,6 +233,21 @@ struct MatchingTests {
         #expect(await harness.calendar.refreshCount == 1)
     }
 
+    @Test("Calendars are refreshed once per pass, however many workouts it matches")
+    func calendarsAreRefreshedOncePerPass() async throws {
+        let workouts = [
+            SyncHarness.run(from: (7, 0), to: (7, 30)),
+            SyncHarness.run(from: (10, 10), to: (11, 5)),
+            SyncHarness.run(from: (12, 5), to: (13, 0), type: .traditionalStrengthTraining),
+        ]
+        let harness = try await SyncHarness.matching(workouts: workouts)
+
+        _ = try await harness.engine.run(.changes(since: nil))
+
+        #expect(await harness.calendar.allEvents.count == 3)
+        #expect(await harness.calendar.refreshCount == 1)
+    }
+
     @Test("The user's own keywords decide matches too")
     func userKeywordsMatch() async throws {
         let workout = SyncHarness.run(from: (18, 0), to: (18, 45))

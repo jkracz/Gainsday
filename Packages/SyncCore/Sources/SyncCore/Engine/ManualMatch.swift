@@ -148,7 +148,8 @@ extension SyncEngine {
         let settings = await settings.load()
         guard let destination = settings.destinationCalendar?.id ?? workout.separate?.calendarID else { return [] }
         // Changing an event with guests can email every one of them.
-        return try await plannedEventCandidates(for: workout.cluster.preferred, destination: destination, settings: settings)
+        let calendarIDs = try await searchCalendarIDs(destination: destination, settings: settings)
+        return try await plannedEventCandidates(for: workout.cluster.preferred, in: calendarIDs, settings: settings)
             .filter { $0.attendeeCount == 0 }
     }
 }
