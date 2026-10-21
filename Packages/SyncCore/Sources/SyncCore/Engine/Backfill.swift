@@ -35,13 +35,10 @@ extension SyncEngine {
             }
         }
         let composer = EventComposer(settings: settings, clock: clock)
+        let recorder = mode == .commit ? try await ActivityRecorder(engine: self, added: found, deletedIDs: []) : nil
         let result = SyncResult(actions: try await engine.syncAdded(found, to: destination.id, settings: settings, composer: composer))
-        switch mode {
-        case .preview:
-            return result
-        case .commit:
-            return await notifyHeldWorkouts(in: ActivityRecorder(engine: self, added: found).record(result))
-        }
+        guard let recorder else { return result }
+        return await notifyHeldWorkouts(in: recorder.record(result))
     }
 
     /// Syncs workouts Health added, oldest first. Workouts from apps the allowlist

@@ -11,7 +11,9 @@ struct ActivityRecorder {
     let engine: SyncEngine
     /// The workouts the pass reads.
     let added: [Workout]
-    /// Ledger entries for the workouts deleted in Health, as they were before the pass.
+    /// Ledger entries for the workouts deleted in Health, and for the times of those
+    /// added, as they were before the pass. A late copy of a synced workout can rewrite
+    /// its event, and Undo puts back what the event held.
     let before: [LedgerEntry]
 
     init(engine: SyncEngine, added: [Workout]) {
@@ -26,6 +28,11 @@ struct ActivityRecorder {
         var before: [LedgerEntry] = []
         for deletedID in deletedIDs {
             before += try await engine.ledger.entries(forWorkout: deletedID)
+        }
+        if let start = added.map(\.start).min(), let end = added.map(\.end).max() {
+            let seen = Set(before.map(\.id))
+            before += try await engine.ledger.entries(in: DateInterval(start: start, end: max(start, end)))
+                .filter { !seen.contains($0.id) }
         }
         self.before = before
     }
