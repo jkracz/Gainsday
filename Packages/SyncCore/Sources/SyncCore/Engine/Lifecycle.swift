@@ -6,6 +6,7 @@ extension SyncEngine {
     /// HealthKit workouts are immutable, so an edit, merge or re-import arrives as a
     /// delete plus an add. When an added workout of the same type overlaps a deleted
     /// one in the same pass, it replaces it: the existing event is updated in place.
+    /// A replacement the user's filters leave out keeps the event as it is.
     ///
     /// Before touching an owned event, the engine compares it with what it last wrote.
     /// If the user edited it, the event is released and left alone from then on. If
@@ -15,6 +16,7 @@ extension SyncEngine {
     /// Returns the actions taken and the added workouts that still need syncing.
     func followDeletions(
         in changes: WorkoutChanges,
+        settings: Settings,
         composer: EventComposer
     ) async throws -> (actions: [SyncAction], remaining: [Workout]) {
         var actions: [SyncAction] = []
@@ -36,6 +38,15 @@ extension SyncEngine {
             var replacement: Workout?
             if let index = try await replacementIndex(for: entry, in: remaining) {
                 replacement = remaining.remove(at: index)
+            }
+            if let replacement, let reason = settings.skipReason(for: replacement) {
+                // Leave the event alone, but follow the replacement so a later delete still reaches it.
+                var entry = entry
+                entry.replace(deletedID, with: replacement)
+                entry.updatedAt = clock.now
+                try await ledger.save(entry)
+                actions.append(.skip(workoutID: replacement.id, reason))
+                continue
             }
             if let action = try await follow(deletedID, in: entry, replacedBy: replacement, composer: composer) {
                 actions.append(action)

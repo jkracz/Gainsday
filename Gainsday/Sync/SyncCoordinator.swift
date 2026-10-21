@@ -77,6 +77,12 @@ final class SyncCoordinator {
         await sync()
     }
 
+    /// Changes settings now and backs them up to iCloud.
+    func updateSettings(_ change: (inout Settings) -> Void) {
+        change(&settings)
+        Task { await settingsStore.save(settings) }
+    }
+
     /// Runs a catch-up pass from the stored anchor. Does nothing before setup, or
     /// while another pass is running, so overlapping triggers create no duplicates.
     func sync() async {

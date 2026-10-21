@@ -23,6 +23,12 @@ public struct WorkoutActivityType: RawRepresentable, Hashable, Codable, Sendable
     public static let yoga = WorkoutActivityType(rawValue: 57)
     public static let highIntensityIntervalTraining = WorkoutActivityType(rawValue: 63)
     public static let other = WorkoutActivityType(rawValue: 3000)
+
+    /// The types the app names and offers in settings.
+    public static let known: [WorkoutActivityType] = [
+        .cycling, .elliptical, .functionalStrengthTraining, .hiking, .rowing, .running,
+        .swimming, .traditionalStrengthTraining, .walking, .yoga, .highIntensityIntervalTraining, .other,
+    ]
 }
 
 /// The metrics a workout may carry. Any of them can be missing, e.g. a strength

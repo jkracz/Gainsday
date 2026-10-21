@@ -37,6 +37,9 @@ struct StatusView: View {
                 }
             }
             .refreshable { await coordinator.sync() }
+            .toolbar {
+                NavigationLink { SettingsView() } label: { Label("Settings", systemImage: "gearshape") }
+            }
             .navigationTitle("Gainsday")
         }
     }
