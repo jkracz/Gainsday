@@ -123,6 +123,10 @@ private actor DryRunLedger: Ledger {
             .filter { $0.workoutStart < interval.end && $0.workoutEnd > interval.start }
     }
 
+    func entriesNeedingLinking() async throws -> [LedgerEntry] {
+        overlaid(try await base.entriesNeedingLinking()).filter(\.needsLinking)
+    }
+
     func save(_ entry: LedgerEntry) async throws {
         overlay[entry.id] = .some(entry)
     }

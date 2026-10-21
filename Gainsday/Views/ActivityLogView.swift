@@ -4,23 +4,24 @@ import SyncCore
 /// The last things Gainsday did and why, with Undo.
 struct ActivityLogView: View {
     @Environment(SyncCoordinator.self) private var coordinator
-    @State private var accessMode: AccessMode?
     @State private var confirming: ActivityLogEntry?
     @State private var undoFailed = false
 
-    private var canUndo: Bool { accessMode == .full && !coordinator.isSyncing }
+    private var canUndo: Bool { coordinator.hasFullCalendarAccess && !coordinator.isSyncing }
 
     var body: some View {
         List {
+            // Undo stays greyed out until the user grants full access.
+            if !coordinator.hasFullCalendarAccess, coordinator.activityLog.contains(where: \.canUndo) {
+                Section {
+                    FullAccessNotice()
+                }
+            }
             Section {
                 ForEach(coordinator.activityLog) { entry in
                     ActivityLogRow(entry: entry, canUndo: canUndo) {
                         confirming = entry
                     }
-                }
-            } footer: {
-                if accessMode != nil, accessMode != .full, !coordinator.activityLog.isEmpty {
-                    Text("Undo requires full calendar access.")
                 }
             }
         }
@@ -34,7 +35,6 @@ struct ActivityLogView: View {
             }
         }
         .navigationTitle("Activity")
-        .task { accessMode = await coordinator.calendar.accessMode() }
         .confirmationDialog(
             confirming?.undo.map { Text($0.confirmationTitle) } ?? Text(verbatim: ""),
             isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),

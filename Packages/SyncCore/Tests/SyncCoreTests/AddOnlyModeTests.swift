@@ -136,6 +136,32 @@ struct AddOnlyModeTests {
         #expect(await harness.calendar.allEvents == [event])
         #expect(await harness.ledger.allEntries.map(\.eventExternalIdentifier) == [event.id])
     }
+
+    @Test("Undo in add-only mode reports that it needs full access, and after upgrading it removes the linked event")
+    func undoNeedsFullAccessThenRemovesLinkedEvent() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout], accessMode: .addOnly)
+        let first = try await harness.engine.run(.changes(since: nil))
+        let entry = try #require(await harness.activityLog.entries.first)
+
+        await #expect(throws: CalendarStoreError.requiresFullAccess) {
+            try await harness.engine.undo(entryID: entry.id)
+        }
+        #expect(await harness.calendar.allEvents.count == 1)
+        #expect(await harness.activityLog.entries.first?.canUndo == true)
+
+        let written = try #require(await harness.calendar.allEvents.first)
+        await harness.calendar.changeIdentifier(of: written.id, to: "after-server-sync")
+        await harness.calendar.setAccessMode(.full)
+        let upgraded = try await harness.engine.run(.changes(since: first.nextAnchor))
+        try await harness.engine.undo(entryID: entry.id)
+        let next = try await harness.engine.run(.changes(since: nil))
+
+        #expect(await harness.calendar.allEvents.isEmpty)
+        #expect(await harness.ledger.allEntries.map(\.state) == [.tombstoned])
+        #expect(upgraded.actions == [.relink(workoutID: workout.id, eventID: "after-server-sync")])
+        #expect(next.actions == [.skip(workoutID: workout.id, .tombstoned)])
+    }
 }
 
 private extension SyncAction {
