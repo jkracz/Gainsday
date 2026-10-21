@@ -69,6 +69,52 @@ struct LifecycleTests {
         #expect(events.first?.content.title.contains("Cycling") == true)
         #expect(await harness.ledger.allEntries.map(\.workoutID) == [ride.id])
     }
+
+    @Test("An event the user edited is released: a replacement doesn't overwrite it, and a later delete leaves it alone")
+    func userEditReleasesEvent() async throws {
+        let original = SyncHarness.run()
+        let harness = SyncHarness(workouts: [original])
+        let first = try await harness.engine.run(.changes(since: nil))
+        var edited = try #require(await harness.calendar.allEvents.first)
+        edited.content.title = "Easy run with Sam"
+        await harness.calendar.put(edited)
+
+        let replacement = SyncHarness.run(minutes: 35, minutesAgo: 5)
+        await harness.workouts.delete(original.id)
+        await harness.workouts.add(replacement)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions == [.release(workoutID: replacement.id, eventID: edited.id)])
+        #expect(await harness.calendar.allEvents == [edited])
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(await harness.ledger.allEntries.count == 1)
+        #expect(entry.state == .released)
+        #expect(entry.covers(replacement.id))
+
+        await harness.workouts.delete(replacement.id)
+        let third = try await harness.engine.run(.changes(since: second.nextAnchor))
+
+        #expect(third.actions.isEmpty)
+        #expect(await harness.calendar.allEvents == [edited])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
+    }
+
+    @Test("Deleting a workout in Health leaves its event alone if the user edited it")
+    func healthDeleteOfEditedEventReleasesIt() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        let first = try await harness.engine.run(.changes(since: nil))
+        var edited = try #require(await harness.calendar.allEvents.first)
+        edited.content.end = edited.content.end.addingTimeInterval(15 * 60)
+        await harness.calendar.put(edited)
+
+        await harness.workouts.delete(workout.id)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions == [.release(workoutID: workout.id, eventID: edited.id)])
+        #expect(await harness.calendar.allEvents == [edited])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
+    }
 }
 
 extension SyncHarness {
