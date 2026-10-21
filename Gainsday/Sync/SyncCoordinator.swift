@@ -18,11 +18,14 @@ final class SyncCoordinator {
     private(set) var isSyncing = false
     private(set) var lastPass: Pass?
     private(set) var lastError: String?
+    /// The activity log, newest first.
+    private(set) var activityLog: [ActivityLogEntry] = []
 
     let health: HealthKitWorkoutSource
     let calendar: EventKitCalendarStore
     private let settingsStore: CloudSettingsStore
     private let anchors: AnchorStore
+    private let activityLogStore: FileActivityLogStore
     private let clock = SystemClock()
     private let engine: SyncEngine
     private static let setupKey = "hasFinishedSetupOnThisDevice"
@@ -36,18 +39,21 @@ final class SyncCoordinator {
         calendar = EventKitCalendarStore()
         settingsStore = CloudSettingsStore()
         anchors = AnchorStore()
+        activityLogStore = FileActivityLogStore()
         engine = SyncEngine(
             workouts: health,
             calendar: calendar,
             ledger: ledger,
             settings: settingsStore,
             judge: UnavailableMatchJudge(),
-            clock: clock
+            clock: clock,
+            activityLog: activityLogStore
         )
     }
 
     func load() async {
         settings = await settingsStore.load()
+        await refreshActivityLog()
         // The setup flag can come back from a device backup, and access can be revoked
         // in Settings. Either way, setup has to ask again before syncing can work.
         if hasFinishedSetupOnThisDevice, await calendar.accessMode() == .none {
@@ -96,5 +102,19 @@ final class SyncCoordinator {
         } catch {
             lastError = error.localizedDescription
         }
+        await refreshActivityLog()
+    }
+
+    /// Undoes an activity log entry. It counts as a pass, so it never runs alongside one.
+    func undo(_ entry: ActivityLogEntry) async throws {
+        guard !isSyncing else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        try await engine.undo(entryID: entry.id)
+        await refreshActivityLog()
+    }
+
+    private func refreshActivityLog() async {
+        activityLog = (try? await activityLogStore.load()) ?? []
     }
 }
