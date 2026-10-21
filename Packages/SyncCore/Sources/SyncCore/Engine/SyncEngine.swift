@@ -62,6 +62,9 @@ public struct SyncEngine: Sendable {
             let isTombstoned = entries.allSatisfy { $0.state == .tombstoned }
             return .skip(workoutID: workout.id, isTombstoned ? .tombstoned : .alreadySynced)
         }
+        if let relinked = try await relinkEarlierEvent(for: workout, in: calendarID, composer: composer) {
+            return relinked
+        }
 
         let draft = EventDraft(calendarID: calendarID, content: composer.content(for: workout), availability: .free)
         let event = try await calendar.create(draft)
