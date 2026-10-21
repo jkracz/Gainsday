@@ -36,6 +36,7 @@ nonisolated final class LocalNotifier: NSObject, ProblemNotifier, UNUserNotifica
         case .calendarAccessRevoked: (String(localized: "Calendar Access Is Off"), String(localized: "Gainsday can't add your workouts to your calendar. Turn calendar access back on in Settings."))
         case .destinationCalendarMissing: (String(localized: "Workout Calendar Is Gone"), String(localized: "The calendar Gainsday adds workouts to was deleted. Open Gainsday to choose another."))
         case .healthAccessRevoked: (String(localized: "Health Access Is Off"), String(localized: "Gainsday can't read your workouts. Turn Health access back on in Settings."))
+        case .matchWaitingForReview: (String(localized: "Workout Waiting for Review"), String(localized: "Gainsday couldn't tell whether a workout belongs to one of your planned events, so it hasn't added it yet. Open the activity log to review it."))
         }
     }
 

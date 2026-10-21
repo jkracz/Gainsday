@@ -5,6 +5,8 @@ public enum UndoError: Error, Hashable, Sendable {
     case entryNotFound
     /// The entry can't be undone, or was undone already.
     case notUndoable
+    /// Undoing an update to a planned event needs the user's choice of what happens to the workout.
+    case choiceRequired
 }
 
 extension SyncEngine {
@@ -14,11 +16,24 @@ extension SyncEngine {
     /// in add-only mode.
     @discardableResult
     public func undo(entryID: UUID) async throws -> ActivityLogEntry {
+        try await performUndo(entryID: entryID, choice: nil)
+    }
+
+    /// Reverses the action of an activity log entry, as above. Undoing an update to a
+    /// planned event also does what the user chose with the workout; other entries
+    /// ignore the choice.
+    @discardableResult
+    public func undo(entryID: UUID, choice: ActivityLogEntry.PlannedEventUndoChoice) async throws -> ActivityLogEntry {
+        try await performUndo(entryID: entryID, choice: choice)
+    }
+
+    private func performUndo(entryID: UUID, choice: ActivityLogEntry.PlannedEventUndoChoice?) async throws -> ActivityLogEntry {
         var log = try await activityLog.load()
         guard let index = log.firstIndex(where: { $0.id == entryID }) else { throw UndoError.entryNotFound }
         var entry = log[index]
         guard entry.canUndo, let undo = entry.undo else { throw UndoError.notUndoable }
         guard await calendar.accessMode() == .full else { throw CalendarStoreError.requiresFullAccess }
+        var followUp: (actions: [SyncAction], workouts: [Workout])?
 
         switch undo {
         case .removeCreatedEvent:
@@ -29,10 +44,17 @@ extension SyncEngine {
             try await restoreEvent(to: content, of: entry)
         case .separateFromPlannedEvent(let draft, let createEntryID):
             try await separateFromPlannedEvent(draft, of: entry, reenabling: createEntryID, in: &log)
+        case .restorePlannedEvent(let content):
+            guard let choice else { throw UndoError.choiceRequired }
+            followUp = try await restorePlannedEvent(content, of: entry, choice: choice)
         }
         entry.undoneAt = clock.now
         log[index] = entry
         try await activityLog.save(log)
+        if let followUp {
+            // A separate event made for the workout gets its own log entry, which can be undone in turn.
+            _ = await ActivityRecorder(engine: self, added: followUp.workouts).record(SyncResult(actions: followUp.actions))
+        }
         return entry
     }
 

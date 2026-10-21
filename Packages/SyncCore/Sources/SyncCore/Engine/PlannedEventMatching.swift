@@ -6,6 +6,8 @@ enum MatchDecision {
     case adopt(CalendarEvent, decidedBy: MatchDecider)
     /// Leave the plans alone and create a separate owned event.
     case separateEvent
+    /// Write nothing and let the user decide.
+    case holdForReview
 }
 
 /// Matching planned events: a workout the user put in their calendar beforehand
@@ -16,6 +18,7 @@ extension SyncEngine {
     /// section in its notes. Returns nil when the workout should get a separate owned
     /// event instead: matching is off or in "create separate event" mode, the app can't
     /// read calendars, nothing matches, the match is unclear, or the event has guests.
+    /// An unclear match can be held for the user's review instead.
     func matchPlannedEvent(for cluster: WorkoutCluster, destination calendarID: String, settings: Settings, composer: EventComposer) async throws -> SyncAction? {
         let workout = cluster.preferred
         guard settings.matchingEnabled, settings.matchMode == .updatePlannedEvent,
@@ -42,14 +45,25 @@ extension SyncEngine {
             return try await adopt(event, for: cluster, decidedBy: decider, settings: settings, composer: composer)
         case .separateEvent:
             return nil
+        case .holdForReview:
+            return .holdForReview(workoutID: workout.id)
         }
     }
 
-    /// The one place a match the rules found unclear is decided. Until the on-device
-    /// model can be asked, each one gets a separate event, so a wrong update never
-    /// happens silently.
+    /// The one place a match the rules found unclear is decided. The on-device model is
+    /// asked when it's on and available, and only a confident answer counts. Otherwise the
+    /// workout gets a separate event, so a wrong update never happens silently, or waits
+    /// for the user's review if they prefer.
     func decideUnclearMatch(for workout: Workout, among candidates: [CalendarEvent], settings: Settings) async throws -> MatchDecision {
-        .separateEvent
+        if settings.matchModelEnabled, await judge.availability() == .available,
+           let judgement = try? await judge.judge(workout, candidates: candidates),
+           judgement.confidence >= MatchJudgement.confidenceNeeded {
+            guard let index = judgement.chosenIndex else { return .separateEvent }
+            if candidates.indices.contains(index) {
+                return .adopt(candidates[index], decidedBy: .model)
+            }
+        }
+        return settings.holdUnclearMatchesForReview ? .holdForReview : .separateEvent
     }
 
     /// Events in the search calendars that could be the plan for the workout: on the
