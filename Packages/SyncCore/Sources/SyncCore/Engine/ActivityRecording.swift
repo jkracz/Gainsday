@@ -32,8 +32,9 @@ struct ActivityRecorder {
 
     /// Adds the result's actions to the top of the log, keeping it to its capacity.
     func record(_ result: SyncResult) async -> SyncResult {
+        let syncStartDate = await engine.settings.load().syncStartDate
         var recorded: [ActivityLogEntry] = []
-        for action in result.actions {
+        for action in result.actions where !isOldHistory(action, syncStartDate: syncStartDate) {
             if let entry = await entry(for: action) {
                 recorded.append(entry)
             }
@@ -42,6 +43,15 @@ struct ActivityRecorder {
         let log = (try? await engine.activityLog.load()) ?? []
         try? await engine.activityLog.save(Array((recorded.reversed() + log).prefix(ActivityLogEntry.capacity)))
         return result
+    }
+
+    /// Whether the action skips a workout from before the sync start date, for any
+    /// reason. Health sends the whole history again when the anchor is lost, e.g. after
+    /// a reinstall, and the filters may leave old workouts out before the date does.
+    private func isOldHistory(_ action: SyncAction, syncStartDate: Date?) -> Bool {
+        guard case .skip(let workoutID, _) = action, let syncStartDate,
+              let workout = added.first(where: { $0.id == workoutID }) else { return false }
+        return workout.start < syncStartDate
     }
 
     private func entry(for action: SyncAction) async -> ActivityLogEntry? {

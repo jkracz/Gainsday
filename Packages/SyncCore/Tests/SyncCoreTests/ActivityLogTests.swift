@@ -154,6 +154,31 @@ struct ActivityLogTests {
         #expect(logged.map(\.workoutID) == [synced.id])
     }
 
+    @Test("Old workouts the filters leave out don't flood the log either, whatever the reason")
+    func oldFilteredHistoryIsNotLogged() async throws {
+        let oldWalk = Workout(
+            activityType: .walking,
+            start: SyncHarness.now.addingTimeInterval(-9 * 24 * 60 * 60),
+            end: SyncHarness.now.addingTimeInterval(-9 * 24 * 60 * 60 + 30 * 60),
+            source: SyncHarness.watch
+        )
+        let oldShortRun = SyncHarness.run(minutes: 3, minutesAgo: 8 * 24 * 60)
+        let oldStravaRun = Workout(
+            activityType: .running,
+            start: SyncHarness.now.addingTimeInterval(-10 * 24 * 60 * 60),
+            end: SyncHarness.now.addingTimeInterval(-10 * 24 * 60 * 60 + 30 * 60),
+            source: WorkoutSourceApp(bundleIdentifier: "com.strava.stravaride", name: "Strava")
+        )
+        var settings = SyncHarness.defaultSettings
+        settings.sourceAllowlist = [SyncHarness.watch.bundleIdentifier]
+        let harness = SyncHarness(workouts: [oldWalk, oldShortRun, oldStravaRun], settings: settings)
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        #expect(result.actions.count == 3)
+        #expect(await harness.activityLog.entries.isEmpty)
+    }
+
     @Test("A skip for a reason the user can act on is logged, but can't be undone")
     func skipIsLoggedWithoutUndo() async throws {
         let workout = SyncHarness.run()
