@@ -21,6 +21,8 @@ public enum SkipReason: Hashable, Sendable {
     case tombstoned
     case alreadySynced
     case sourceNotAllowed
+    /// Updating or deleting the event needs full calendar access, and the app has add-only access.
+    case requiresFullAccess
 }
 
 /// One action a pass took, or planned to take in a backfill preview. Each one
