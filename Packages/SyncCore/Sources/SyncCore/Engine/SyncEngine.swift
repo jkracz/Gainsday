@@ -9,6 +9,7 @@ public struct SyncEngine: Sendable {
     public var settings: any SettingsStore
     public var judge: any MatchJudge
     public var clock: any Clock
+    public var activityLog: any ActivityLogStore
 
     public init(
         workouts: any WorkoutSource,
@@ -16,7 +17,8 @@ public struct SyncEngine: Sendable {
         ledger: any Ledger,
         settings: any SettingsStore,
         judge: any MatchJudge,
-        clock: any Clock
+        clock: any Clock,
+        activityLog: any ActivityLogStore
     ) {
         self.workouts = workouts
         self.calendar = calendar
@@ -24,6 +26,7 @@ public struct SyncEngine: Sendable {
         self.settings = settings
         self.judge = judge
         self.clock = clock
+        self.activityLog = activityLog
     }
 
     /// Runs one sync pass.
@@ -31,7 +34,8 @@ public struct SyncEngine: Sendable {
     /// The sync rules are added feature by feature. For now a changes pass first follows
     /// Health deletes and replacements (see `followDeletions`), then creates an owned
     /// event for each new workout since the sync start date that the ledger doesn't
-    /// know yet. Backfill reads its inputs and takes no actions.
+    /// know yet. Backfill reads its inputs and takes no actions. The actions of a
+    /// changes pass are recorded in the activity log (see `ActivityRecorder`).
     public func run(_ trigger: SyncTrigger) async throws -> SyncResult {
         switch trigger {
         case .changes(let anchor):
@@ -41,13 +45,14 @@ public struct SyncEngine: Sendable {
                 return SyncResult()
             }
             let changes = try await workouts.changes(since: anchor)
+            let recorder = try await ActivityRecorder(engine: self, added: changes.added, deletedIDs: changes.deletedIDs)
             let composer = EventComposer(locale: clock.locale, footerEnabled: settings.footerEnabled)
             let followed = try await followDeletions(in: changes, composer: composer)
             var actions = followed.actions
             for workout in followed.remaining.sorted(by: { $0.start < $1.start }) {
                 actions.append(try await sync(workout, to: destination.id, since: syncStartDate, composer: composer))
             }
-            return SyncResult(actions: actions, nextAnchor: changes.anchor)
+            return await recorder.record(SyncResult(actions: actions, nextAnchor: changes.anchor))
         case .backfill(let interval, _):
             _ = try await workouts.workouts(in: interval)
             return SyncResult(actions: [])

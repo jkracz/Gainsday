@@ -14,7 +14,7 @@ public enum BackfillMode: Hashable, Sendable {
 }
 
 /// Why a workout was left alone.
-public enum SkipReason: Hashable, Sendable {
+public enum SkipReason: Hashable, Codable, Sendable {
     case typeDisabled
     case tooShort
     case beforeSyncStartDate
@@ -27,7 +27,7 @@ public enum SkipReason: Hashable, Sendable {
 
 /// One action a pass took, or planned to take in a backfill preview. Each one
 /// becomes an activity log entry.
-public enum SyncAction: Hashable, Sendable {
+public enum SyncAction: Hashable, Codable, Sendable {
     case create(workoutID: UUID, EventDraft)
     case update(workoutID: UUID, eventID: String, EventContent)
     case delete(workoutID: UUID, eventID: String)
