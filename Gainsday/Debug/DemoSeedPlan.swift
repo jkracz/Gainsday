@@ -69,5 +69,14 @@ struct DemoSeedPlan: Equatable {
         let plannedStart = calendar.date(from: components)!
         plannedRun = PlannedEventSpec(title: "Run", start: plannedStart, end: plannedStart.addingTimeInterval(45 * 60))
     }
+
+    /// A workout finishing right now, for showing a new workout arriving after setup.
+    /// HIIT, so it never overlaps or replaces the seeded runs.
+    static func workoutEndingNow(_ now: Date) -> WorkoutSpec {
+        WorkoutSpec(
+            activityType: .highIntensityIntervalTraining, isIndoor: true, start: now.addingTimeInterval(-20 * 60), end: now,
+            activeEnergyKilocalories: 240, averageHeartRate: 149
+        )
+    }
 }
 #endif

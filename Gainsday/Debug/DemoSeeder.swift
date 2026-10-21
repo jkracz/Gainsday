@@ -15,6 +15,8 @@ import UIKit
 /// a demo build passes to xcodebuild: see `usageDescriptionKey`.
 enum DemoSeeder {
     static let launchArgument = "-seedDemoData"
+    /// Adds one more workout, ending now, and leaves everything else alone.
+    static let workoutNowLaunchArgument = "-seedDemoWorkoutNow"
     /// Marks every sample the seeder writes, so the next run can delete them.
     static let markerKey = "GainsdayDemoSeed"
     static let workoutsCalendarTitle = "Workouts"
@@ -22,6 +24,9 @@ enum DemoSeeder {
     private static let log = Logger(subsystem: "app.gainsday.ios", category: "DemoSeeder")
 
     static func runIfRequested() async {
+        if ProcessInfo.processInfo.arguments.contains(workoutNowLaunchArgument) {
+            await addWorkoutEndingNow()
+        }
         guard ProcessInfo.processInfo.arguments.contains(launchArgument) else { return }
         let plan = DemoSeedPlan(now: Date())
         do {
@@ -49,16 +54,7 @@ enum DemoSeeder {
 
     /// Asks only to write, so setup's Health step still asks to read.
     private static func seedHealth(_ plan: DemoSeedPlan) async throws {
-        guard Bundle.main.object(forInfoDictionaryKey: usageDescriptionKey) != nil else {
-            log.error("Demo Health seeding skipped: build with INFOPLIST_KEY_\(usageDescriptionKey)=...")
-            return
-        }
-        let store = HKHealthStore()
-        try await store.requestAuthorization(toShare: shareTypes, read: [])
-        guard store.authorizationStatus(for: .workoutType()) == .sharingAuthorized else {
-            log.error("Demo seeding skipped: writing workouts to Health wasn't allowed")
-            return
-        }
+        let store = try await authorizedStore()
         let marker = HKQuery.predicateForObjects(withMetadataKey: markerKey)
         for type in shareTypes {
             _ = try await store.deleteObjects(of: type, predicate: marker)
@@ -66,6 +62,32 @@ enum DemoSeeder {
         for spec in plan.workouts {
             try await save(spec, to: store)
         }
+    }
+
+    private static func addWorkoutEndingNow() async {
+        do {
+            let store = try await authorizedStore()
+            try await save(DemoSeedPlan.workoutEndingNow(Date()), to: store)
+            log.notice("Demo workout added, ending now")
+        } catch {
+            log.error("Demo workout not added: \(error)")
+        }
+    }
+
+    struct CantWrite: Error, CustomStringConvertible {
+        var description: String
+    }
+
+    private static func authorizedStore() async throws -> HKHealthStore {
+        guard Bundle.main.object(forInfoDictionaryKey: usageDescriptionKey) != nil else {
+            throw CantWrite(description: "build with INFOPLIST_KEY_\(usageDescriptionKey)=...")
+        }
+        let store = HKHealthStore()
+        try await store.requestAuthorization(toShare: shareTypes, read: [])
+        guard store.authorizationStatus(for: .workoutType()) == .sharingAuthorized else {
+            throw CantWrite(description: "writing workouts to Health wasn't allowed")
+        }
+        return store
     }
 
     /// Uses a workout builder, so the workout's statistics carry distance, energy and heart rate.

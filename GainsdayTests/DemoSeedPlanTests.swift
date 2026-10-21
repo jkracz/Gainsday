@@ -44,5 +44,14 @@ struct DemoSeedPlanTests {
         #expect(calendar.component(.minute, from: plan.plannedRun.start) % 15 == 0)
         #expect(calendar.component(.second, from: plan.plannedRun.start) == 0)
     }
+
+    @Test("The workout ending now is a different type from every seeded one, so it's never taken for a replacement")
+    func workoutEndingNowIsNew() {
+        let plan = DemoSeedPlan(now: now, calendar: calendar)
+        let workout = DemoSeedPlan.workoutEndingNow(now)
+
+        #expect(workout.end == now && workout.start < now)
+        #expect(!plan.workouts.map(\.activityType).contains(workout.activityType))
+    }
 }
 #endif
