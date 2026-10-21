@@ -41,4 +41,7 @@ public enum WorkoutSourceError: Error, Hashable, Sendable {
     /// Health access is off. HealthKit hides denied read access by returning no
     /// results, so this is only reported when HealthKit says so.
     case accessDenied
+    /// Health data is protected while the phone is locked. Not a problem to report:
+    /// the pass is run again once the phone is unlocked.
+    case locked
 }
