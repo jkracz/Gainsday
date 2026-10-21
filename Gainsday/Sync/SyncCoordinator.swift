@@ -16,18 +16,19 @@ final class SyncCoordinator {
     /// Health and calendar permissions don't survive a reinstall, though settings
     /// restored from iCloud do, so setup runs once on every install.
     private(set) var hasFinishedSetupOnThisDevice = UserDefaults.standard.bool(forKey: setupKey)
-    private(set) var isSyncing = false
-    private(set) var lastPass: Pass?
-    private(set) var lastError: String?
+    /// Set while a pass or backfill runs, so they never overlap and create duplicates.
+    var isSyncing = false
+    var lastPass: Pass?
+    var lastError: String?
 
     let health: HealthKitWorkoutSource
     let calendar: EventKitCalendarStore
     private let settingsStore: CloudSettingsStore
     private let anchors: AnchorStore
-    private let cloudImport = CloudImportMonitor()
-    private let clock = SystemClock()
+    let cloudImport = CloudImportMonitor()
+    let clock = SystemClock()
     private let notifier = LocalNotifier()
-    private let engine: SyncEngine
+    let engine: SyncEngine
     private static let setupKey = "hasFinishedSetupOnThisDevice"
 
     var isSetUp: Bool {
