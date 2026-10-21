@@ -29,7 +29,11 @@ struct MatchEventView: View {
                     } header: {
                         Text("Planned Near This Workout")
                     } footer: {
-                        Text("The event moves to the workout's times and gains the workout in its notes, and the workout's separate event is removed. You can undo this in the activity log.")
+                        if entry.isAwaitingReview {
+                            Text("The event moves to the workout's times and gains the workout in its notes. You can undo this in the activity log.")
+                        } else {
+                            Text("The event moves to the workout's times and gains the workout in its notes, and the workout's separate event is removed. You can undo this in the activity log.")
+                        }
                     }
                 }
             }

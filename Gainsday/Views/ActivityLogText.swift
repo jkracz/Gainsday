@@ -51,6 +51,7 @@ extension ActivityLogEntry.Undo {
         case .restoreEvent: "Put the event back as it was?"
         case .recreateEvent: "Add the event back?"
         case .separateFromPlannedEvent: "Undo the match?"
+        case .returnToReview: "Review this workout again?"
         case .restorePlannedEvent: "Put your planned event back as it was?"
         }
     }
@@ -61,6 +62,7 @@ extension ActivityLogEntry.Undo {
         case .restoreEvent: "Gainsday restores the event's earlier title, time and notes, and won't change it again."
         case .recreateEvent: "Gainsday adds the event again as it was, and won't change it again."
         case .separateFromPlannedEvent: "Gainsday puts your planned event back as it was, and adds the workout's own event again."
+        case .returnToReview: "Gainsday removes the workout's event, or puts your planned event back as it was. The workout then waits for your review again."
         case .restorePlannedEvent: "Gainsday restores the event's original title, time and notes, and won't change it again. The workout can get its own event, or be left out."
         }
     }
@@ -71,6 +73,7 @@ extension ActivityLogEntry.Undo {
         case .restoreEvent: "Restore Event"
         case .recreateEvent: "Add Event Back"
         case .separateFromPlannedEvent: "Undo Match"
+        case .returnToReview: "Undo Choice"
         case .restorePlannedEvent: "Restore Event"
         }
     }

@@ -1,7 +1,8 @@
 import Foundation
 import SyncCore
 
-/// "Match to an event…": matching a logged workout to a plan that synced too late. [v1.1]
+/// Settling a logged workout by hand: "Match to an event…" for a plan that synced too
+/// late or a workout held for review, and "Add as separate event" for a held one. [v1.1]
 extension SyncCoordinator {
     /// The events the entry's workout can be matched to. Never events with guests.
     func matchCandidates(for entry: ActivityLogEntry) async throws -> [CalendarEvent] {
@@ -14,6 +15,14 @@ extension SyncCoordinator {
         runningPasses += 1
         defer { runningPasses -= 1 }
         try await runner.match(entryID: entry.id, toEventID: event.id)
+        await refreshActivityLog()
+    }
+
+    /// Adds a workout held for review as its own event.
+    func addSeparateEvent(for entry: ActivityLogEntry) async throws {
+        runningPasses += 1
+        defer { runningPasses -= 1 }
+        try await runner.addSeparateEvent(entryID: entry.id)
         await refreshActivityLog()
     }
 }
