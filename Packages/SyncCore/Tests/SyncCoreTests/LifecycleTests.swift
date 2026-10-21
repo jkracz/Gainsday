@@ -157,6 +157,46 @@ struct LifecycleTests {
         #expect(await harness.calendar.allEvents.isEmpty)
         #expect(await harness.ledger.allEntries.map(\.state) == [.tombstoned])
     }
+
+    @Test("With add-only access, a Health delete leaves the event, reports that it needs full access, and finishes the pass")
+    func addOnlyHealthDelete() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout], accessMode: .addOnly)
+        let first = try await harness.engine.run(.changes(since: nil))
+
+        await harness.workouts.delete(workout.id)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions == [.skip(workoutID: workout.id, .requiresFullAccess)])
+        #expect(second.nextAnchor != nil)
+        #expect(await harness.calendar.allEvents.count == 1)
+        #expect(await harness.ledger.allEntries.map(\.state) == [.owned])
+    }
+
+    @Test("With add-only access, a replacement keeps the existing event and doesn't create a duplicate")
+    func addOnlyReplacement() async throws {
+        let original = SyncHarness.run()
+        let harness = SyncHarness(workouts: [original], accessMode: .addOnly)
+        let first = try await harness.engine.run(.changes(since: nil))
+        let event = try #require(await harness.calendar.allEvents.first)
+
+        let replacement = SyncHarness.run(minutes: 35, minutesAgo: 5)
+        await harness.workouts.delete(original.id)
+        await harness.workouts.add(replacement)
+        let second = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(second.actions == [.skip(workoutID: replacement.id, .requiresFullAccess)])
+        #expect(await harness.calendar.allEvents == [event])
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(await harness.ledger.allEntries.count == 1)
+        #expect(entry.state == .owned)
+        #expect(entry.covers(replacement.id))
+
+        let fromScratch = try await harness.engine.run(.changes(since: nil))
+
+        #expect(fromScratch.actions == [.skip(workoutID: replacement.id, .alreadySynced)])
+        #expect(await harness.calendar.allEvents.count == 1)
+    }
 }
 
 extension SyncHarness {

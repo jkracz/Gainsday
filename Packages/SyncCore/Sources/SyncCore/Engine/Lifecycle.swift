@@ -20,43 +20,68 @@ extension SyncEngine {
         var remaining = changes.added
         for deletedID in changes.deletedIDs {
             for entry in try await ledger.entries(forWorkout: deletedID) where entry.state == .owned {
-                guard let eventID = entry.eventExternalIdentifier else { continue }
-                var entry = entry
                 var replacement: Workout?
                 if let index = try await replacementIndex(for: entry, in: remaining) {
-                    let workout = remaining.remove(at: index)
-                    entry.replace(deletedID, with: workout)
-                    replacement = workout
+                    replacement = remaining.remove(at: index)
                 }
-                let workoutID = replacement?.id ?? deletedID
-                guard let event = try await calendar.event(withID: eventID) else {
-                    // The user deleted the event: never create one for this workout again.
-                    entry.state = .tombstoned
-                    entry.updatedAt = clock.now
-                    try await ledger.save(entry)
-                    actions.append(.skip(workoutID: workoutID, .tombstoned))
-                    continue
-                }
-                if !event.content.matches(entry.written) {
-                    entry.state = .released
-                    entry.updatedAt = clock.now
-                    try await ledger.save(entry)
-                    actions.append(.release(workoutID: workoutID, eventID: eventID))
-                } else if let replacement {
-                    let updated = try await calendar.update(eventID: eventID, to: composer.content(for: replacement))
-                    entry.eventExternalIdentifier = updated.id
-                    entry.written = updated.content
-                    entry.updatedAt = clock.now
-                    try await ledger.save(entry)
-                    actions.append(.update(workoutID: workoutID, eventID: updated.id, updated.content))
-                } else {
-                    try await calendar.delete(eventID: eventID)
-                    try await ledger.delete(entryID: entry.id)
-                    actions.append(.delete(workoutID: workoutID, eventID: eventID))
+                if let action = try await follow(deletedID, in: entry, replacedBy: replacement, composer: composer) {
+                    actions.append(action)
                 }
             }
         }
         return (actions, remaining)
+    }
+
+    /// Deletes, updates, releases or tombstones one owned entry's event after its
+    /// workout was deleted, and possibly replaced, in Health.
+    private func follow(
+        _ deletedID: UUID,
+        in entry: LedgerEntry,
+        replacedBy replacement: Workout?,
+        composer: EventComposer
+    ) async throws -> SyncAction? {
+        guard let eventID = entry.eventExternalIdentifier else { return nil }
+        var entry = entry
+        if let replacement {
+            entry.replace(deletedID, with: replacement)
+        }
+        let workoutID = replacement?.id ?? deletedID
+        let save = { (state: LedgerEntry.State) in
+            entry.state = state
+            entry.updatedAt = clock.now
+            try await ledger.save(entry)
+        }
+
+        let event: CalendarEvent?
+        do {
+            event = try await calendar.event(withID: eventID)
+        } catch CalendarStoreError.requiresFullAccess {
+            // Add-only access can't read, update or delete the event. Keep it, and
+            // point the entry at any replacement so it isn't created a second time.
+            if replacement != nil {
+                try await save(.owned)
+            }
+            return .skip(workoutID: workoutID, .requiresFullAccess)
+        }
+        guard let event else {
+            // The user deleted the event: never create one for this workout again.
+            try await save(.tombstoned)
+            return .skip(workoutID: workoutID, .tombstoned)
+        }
+        guard event.content.matches(entry.written) else {
+            try await save(.released)
+            return .release(workoutID: workoutID, eventID: eventID)
+        }
+        guard let replacement else {
+            try await calendar.delete(eventID: eventID)
+            try await ledger.delete(entryID: entry.id)
+            return .delete(workoutID: workoutID, eventID: eventID)
+        }
+        let updated = try await calendar.update(eventID: eventID, to: composer.content(for: replacement))
+        entry.eventExternalIdentifier = updated.id
+        entry.written = updated.content
+        try await save(.owned)
+        return .update(workoutID: workoutID, eventID: updated.id, updated.content)
     }
 
     /// The first added workout of the same type that overlaps the entry's workout
