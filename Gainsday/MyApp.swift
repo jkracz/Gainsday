@@ -24,6 +24,9 @@ import SwiftUI
                 .environment(coordinator)
                 .task { await coordinator.load() }
                 .task { await coordinator.watchCloudSettings() }
+                #if DEBUG
+                .task { await DemoSeeder.runIfRequested() }
+                #endif
         }
         .onChange(of: scenePhase) { _, phase in
             // Catch up on every app open.
