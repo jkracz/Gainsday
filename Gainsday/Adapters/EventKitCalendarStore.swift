@@ -160,7 +160,7 @@ actor EventKitCalendarStore: CalendarStore {
     }
 }
 
-private extension Date {
+nonisolated private extension Date {
     /// The same instant without its fraction of a second, matching `ContentFingerprint`.
     var truncatedToSecond: Date {
         Date(timeIntervalSince1970: timeIntervalSince1970.rounded(.down))
