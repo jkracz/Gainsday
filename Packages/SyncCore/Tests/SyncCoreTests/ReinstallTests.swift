@@ -132,7 +132,8 @@ struct ReinstallTests {
             await harness.calendar.put(try await SyncHarness.eventLeftByEarlierInstall(for: workout, id: "event"))
             for (index, entry) in arrivalOrder.enumerated() {
                 var arrived = entry
-                arrived.createdAt = SyncHarness.now.addingTimeInterval(Double(index))
+                // Both were created before the tombstone, so the owned one knew the event.
+                arrived.createdAt = SyncHarness.now.addingTimeInterval(-7200 + Double(index))
                 try await harness.ledger.save(arrived)
             }
 
@@ -140,6 +141,7 @@ struct ReinstallTests {
 
             #expect(result.actions == [.skip(workoutID: workout.id, .alreadySynced)])
             #expect(await harness.ledger.allEntries.map(\.id) == [owned.id])
+            #expect(await harness.ledger.allEntries.map(\.state) == [.owned])
             #expect(await harness.calendar.allEvents.count == 1)
         }
     }
@@ -169,6 +171,62 @@ struct ReinstallTests {
         }
         #expect(Set(survivors).count == 1)
         #expect(survivors.first != older.id)
+    }
+
+    @Test("An edit released before a reinstall still holds when the old entry arrives after the event was re-linked")
+    func lateReleasedEntryKeepsTheUsersEdit() async throws {
+        let workout = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let harness = SyncHarness(workouts: [workout])
+        var edited = try await SyncHarness.eventLeftByEarlierInstall(for: workout)
+        edited.content.title = "Run with Sam"
+        await harness.calendar.put(edited)
+        let first = try await harness.engine.run(.changes(since: nil))
+        #expect(first.actions == [.relink(workoutID: workout.id, eventID: edited.id)])
+        var released = SyncHarness.ownedEntry(for: workout, eventID: edited.id, updatedAt: SyncHarness.now.addingTimeInterval(-3600))
+        released.state = .released
+        try await harness.ledger.save(released)
+
+        let replacement = SyncHarness.run(minutes: 35, minutesAgo: 5)
+        await harness.workouts.delete(workout.id)
+        await harness.workouts.add(replacement)
+        _ = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(await harness.calendar.allEvents.map(\.content.title) == ["Run with Sam"])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
+    }
+
+    @Test("An event deleted before a reinstall is deleted again when its tombstone arrives after the event was recreated")
+    func lateTombstoneDeletesRecreatedEvent() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        _ = try await harness.engine.run(.changes(since: nil))
+        var tombstone = SyncHarness.ownedEntry(for: workout, eventID: "deleted-before-reinstall", updatedAt: SyncHarness.now.addingTimeInterval(-3600))
+        tombstone.state = .tombstoned
+        try await harness.ledger.save(tombstone)
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        #expect(result.actions == [.skip(workoutID: workout.id, .tombstoned)])
+        #expect(await harness.calendar.allEvents.isEmpty)
+        #expect(await harness.ledger.allEntries.map(\.state) == [.tombstoned])
+    }
+
+    @Test("A recreated event the user has since edited is kept, and released, when the old tombstone arrives")
+    func lateTombstoneKeepsEditedRecreatedEvent() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        _ = try await harness.engine.run(.changes(since: nil))
+        var recreated = try #require(await harness.calendar.allEvents.first)
+        recreated.content.title = "Run with Sam"
+        await harness.calendar.put(recreated)
+        var tombstone = SyncHarness.ownedEntry(for: workout, eventID: "deleted-before-reinstall", updatedAt: SyncHarness.now.addingTimeInterval(-3600))
+        tombstone.state = .tombstoned
+        try await harness.ledger.save(tombstone)
+
+        _ = try await harness.engine.run(.changes(since: nil))
+
+        #expect(await harness.calendar.allEvents == [recreated])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
     }
 
     @Test("When duplicate entries link different events, the losing entry's unedited event is deleted")

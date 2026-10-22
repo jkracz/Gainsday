@@ -21,15 +21,30 @@ extension SyncEngine {
     /// before iCloud merged their ledgers. That event is deleted if it's still as the
     /// app wrote it. Otherwise it's the user's: the duplicate is kept, released, so the
     /// app leaves the event alone and never offers it as a plan.
+    ///
+    /// An owned survivor created after a duplicate's release or tombstone was made
+    /// without knowing about it, e.g. by the first pass after a reinstall whose ledger
+    /// arrived late. The user's decision wins (see `carryOverDecision`).
     func resolvedEntry(forWorkout workoutID: UUID) async throws -> LedgerEntry? {
         let entries = try await ledger.entries(forWorkout: workoutID)
         guard var survivor = LedgerEntry.survivor(of: entries) else { return nil }
-        let others = entries.filter { $0.id != survivor.id && !$0.isReleasedDuplicate(of: survivor) }
+        var others = entries.filter { $0.id != survivor.id && !$0.isReleasedDuplicate(of: survivor) }
         guard !others.isEmpty else { return survivor }
 
+        var changed = false
+        if let decision = survivor.missedDecision(among: others) {
+            if try await carryOverDecision(of: decision, to: &survivor) {
+                changed = true
+            } else {
+                others.removeAll { $0.id == decision.id }
+            }
+        }
         let members = others.reduce(survivor.memberIDs) { $0.union($1.memberIDs) }
         if members != survivor.memberIDs {
             survivor.memberIDs = members
+            changed = true
+        }
+        if changed {
             try await ledger.save(survivor)
         }
         for other in others {
@@ -43,6 +58,28 @@ extension SyncEngine {
             try await ledger.delete(entryID: other.id)
         }
         return survivor
+    }
+
+    /// Applies a release or tombstone the survivor didn't know about. A release keeps
+    /// the event as the user has it. A tombstone deletes the event if it's still as the
+    /// app wrote it, or releases it if the user has changed it since. False, changing
+    /// nothing, when add-only access can't delete the event yet: the tombstone is kept
+    /// for a later pass.
+    private func carryOverDecision(of decision: LedgerEntry, to survivor: inout LedgerEntry) async throws -> Bool {
+        var state = decision.state
+        if state == .tombstoned, let eventID = survivor.eventExternalIdentifier {
+            guard await calendar.accessMode() == .full else { return false }
+            if let event = try await calendar.event(withID: eventID) {
+                if event.content.matches(survivor.written) {
+                    try await calendar.delete(eventID: eventID)
+                } else {
+                    state = .released
+                }
+            }
+        }
+        survivor.state = state
+        survivor.updatedAt = clock.now
+        return true
     }
 
     /// Deletes a duplicate entry's event if it's an owned event the user hasn't changed,
@@ -63,6 +100,15 @@ private extension LedgerEntry {
         guard state != .tombstoned, let eventID = eventExternalIdentifier,
               let survivorEventID = survivor.eventExternalIdentifier else { return false }
         return eventID != survivorEventID
+    }
+
+    /// The most recent release or tombstone among the duplicates that this owned entry
+    /// was created after, so it can't have known about it.
+    func missedDecision(among others: [LedgerEntry]) -> LedgerEntry? {
+        guard state == .owned else { return nil }
+        return others
+            .filter { [.released, .tombstoned].contains($0.state) && createdAt > $0.updatedAt }
+            .max { ($0.updatedAt, $0.id.uuidString) < ($1.updatedAt, $1.id.uuidString) }
     }
 
     /// A duplicate kept, released, for the user's own copy of the workout's event.
