@@ -99,6 +99,7 @@ extension SyncEngine {
             activityType: cluster.preferred.activityType,
             workoutStart: cluster.preferred.start,
             eventID: plan.id,
+            ledgerEntryID: try await ledger.entries(forWorkout: cluster.preferred.id).first { $0.state == .adopted }?.id,
             undo: undo
         ))
     }
@@ -130,13 +131,20 @@ extension SyncEngine {
 
     /// Adds the entry for what the user did to the top of the log, and marks the entry
     /// they did it from: a held workout as reviewed, or a create as having nothing left
-    /// to undo, since its separate event has gone.
+    /// to undo, since its separate event has gone. Earlier Undos of the separate event,
+    /// e.g. of an update, go too.
     func recordSettled(_ workout: SettlingWorkout, with entry: ActivityLogEntry) async throws -> ActivityLogEntry {
         var log = try await activityLog.load()
-        if let index = log.firstIndex(where: { $0.id == workout.logEntry.id }) {
-            if workout.separate == nil {
-                log[index].reviewedAt = clock.now
-            } else {
+        if let index = log.firstIndex(where: { $0.id == workout.logEntry.id }), workout.separate == nil {
+            log[index].reviewedAt = clock.now
+        }
+        if let separate = workout.separate {
+            for index in log.indices where log[index].ledgerEntryID == separate.id
+                || (log[index].ledgerEntryID == nil && log[index].eventID != nil && log[index].eventID == separate.eventExternalIdentifier) {
+                if case .recreateEvent = log[index].undo { continue }
+                log[index].undo = nil
+            }
+            if let index = log.firstIndex(where: { $0.id == workout.logEntry.id }) {
                 log[index].undo = nil
             }
         }

@@ -48,7 +48,9 @@ extension SyncEngine {
         )
         if case .create(let workoutID, let draft) = action {
             entry.title = draft.content.title
-            entry.eventID = try await ledger.entries(forWorkout: workoutID).compactMap(\.eventExternalIdentifier).first
+            let created = try await ledger.entries(forWorkout: workoutID).first { $0.state == .owned }
+            entry.eventID = created?.eventExternalIdentifier
+            entry.ledgerEntryID = created?.id
             entry.undo = .returnToReview(heldEntryID: workout.logEntry.id)
         }
         return try await recordSettled(workout, with: entry)

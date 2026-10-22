@@ -19,6 +19,9 @@ public struct ActivityLogEntry: Identifiable, Hashable, Codable, Sendable {
     public var workoutStart: Date?
     /// The event the action was about, when there is one.
     public var eventID: String?
+    /// The ledger entry the action left the workout with, which its Undo acts on. Nil
+    /// for entries logged before it was recorded.
+    public var ledgerEntryID: UUID?
     /// How to reverse the action, or nil when it can't be undone.
     public var undo: Undo?
     /// When the user undid the action, or nil if they haven't.
@@ -35,6 +38,7 @@ public struct ActivityLogEntry: Identifiable, Hashable, Codable, Sendable {
         activityType: WorkoutActivityType? = nil,
         workoutStart: Date? = nil,
         eventID: String? = nil,
+        ledgerEntryID: UUID? = nil,
         undo: Undo? = nil,
         undoneAt: Date? = nil,
         reviewedAt: Date? = nil
@@ -46,6 +50,7 @@ public struct ActivityLogEntry: Identifiable, Hashable, Codable, Sendable {
         self.activityType = activityType
         self.workoutStart = workoutStart
         self.eventID = eventID
+        self.ledgerEntryID = ledgerEntryID
         self.undo = undo
         self.undoneAt = undoneAt
         self.reviewedAt = reviewedAt
