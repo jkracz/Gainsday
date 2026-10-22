@@ -76,7 +76,7 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
             predicates: [.workout(HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: .strictStartDate))],
             sortDescriptors: [SortDescriptor(\.startDate)]
         )
-        return try await descriptor.result(for: store).map(Self.workout)
+        return try await Self.mappingAccessErrors { try await descriptor.result(for: store) }.map(Self.workout)
     }
 
     func recentWorkouts(limit: Int) async throws -> [Workout] {
@@ -86,7 +86,7 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
             sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
             limit: limit
         )
-        return try await descriptor.result(for: store).map(Self.workout)
+        return try await Self.mappingAccessErrors { try await descriptor.result(for: store) }.map(Self.workout)
     }
 
     private func requireHealthData() throws {
@@ -94,7 +94,8 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
     }
 
     /// Reports HealthKit's authorization errors as `WorkoutSourceError.accessDenied`,
-    /// and its locked-phone error as `.locked`. HealthKit usually hides denied read
+    /// and its locked-phone error as `.locked`, for every Health read, so a pass that
+    /// finds the phone locked runs again on unlock. HealthKit usually hides denied read
     /// access by returning no results instead.
     static func mappingAccessErrors<T>(_ read: () async throws -> T) async throws -> T {
         do {
