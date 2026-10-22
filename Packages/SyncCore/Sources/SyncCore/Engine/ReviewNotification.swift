@@ -11,6 +11,12 @@ extension SyncEngine {
         }
         return result
     }
+
+    /// Withdraws the notification once no workout in `log` is waiting for review.
+    func withdrawReviewNotification(ifNoneAwaitingIn log: [ActivityLogEntry]) async {
+        guard !log.contains(where: \.isAwaitingReview) else { return }
+        await resolve(.matchWaitingForReview)
+    }
 }
 
 private extension SyncAction {

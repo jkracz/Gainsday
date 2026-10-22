@@ -1,4 +1,5 @@
 import Foundation
+import SyncCore
 import Testing
 @testable import Gainsday
 
@@ -48,5 +49,30 @@ struct CloudImportMonitorTests {
         #expect(laterPass == false)
         #expect(afterRelaunch == false)
         #expect(clock.now - started < .seconds(5))
+    }
+
+    @Test("In add-only mode nothing is written while the first import is unresolved, on this pass or later ones, since duplicates can't be spotted")
+    func addOnlyWaitsForImport() async {
+        let monitor = CloudImportMonitor(defaults: defaults, center: NotificationCenter(), hasICloudAccount: { true })
+
+        #expect(await monitor.isSafeToWrite(with: .addOnly, timeout: .milliseconds(100)) == false)
+        #expect(await monitor.isSafeToWrite(with: .addOnly, timeout: .seconds(60)) == false)
+
+        monitor.markImportFinished()
+        #expect(await monitor.isSafeToWrite(with: .addOnly, timeout: .seconds(60)))
+    }
+
+    @Test("With full access a pass goes ahead after the timeout, since the footer scan stops duplicates")
+    func fullAccessGoesAhead() async {
+        let monitor = CloudImportMonitor(defaults: defaults, center: NotificationCenter(), hasICloudAccount: { true })
+
+        #expect(await monitor.isSafeToWrite(with: .full, timeout: .milliseconds(100)))
+    }
+
+    @Test("A fresh setup in add-only mode with no iCloud account goes ahead, since there's nothing to import")
+    func addOnlyWithoutAccountGoesAhead() async {
+        let monitor = CloudImportMonitor(defaults: defaults, center: NotificationCenter(), hasICloudAccount: { false })
+
+        #expect(await monitor.isSafeToWrite(with: .addOnly, timeout: .seconds(60)))
     }
 }

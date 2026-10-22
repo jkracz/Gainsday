@@ -20,6 +20,8 @@ final class SyncCoordinator {
     var isSyncing: Bool { runningPasses > 0 }
     /// A pass found the phone locked. It runs again once the phone is unlocked.
     var isWaitingForUnlock = false
+    /// With add-only access, passes write nothing until the ledger has come back from iCloud.
+    private(set) var isWaitingForICloudImport = false
     var lastPass: Pass?
     var lastError: String?
     /// The activity log, newest first.
@@ -91,6 +93,10 @@ final class SyncCoordinator {
             await engine.report(.calendarAccessRevoked)
             forgetSetup()
         }
+        // After switching to add-only access, events can only go to the default calendar.
+        if hasFinishedSetupOnThisDevice, calendarAccess == .addOnly {
+            settings = await engine.usingDefaultCalendarWithAddOnlyAccess()
+        }
     }
 
     /// Reloads settings whenever iCloud delivers a change, since settings restored
@@ -132,6 +138,8 @@ final class SyncCoordinator {
         defer { runningPasses -= 1 }
         do {
             try await withTimeout(Self.passTimeout) { await self.runPass() }
+        } catch is CancellationError {
+            // The system stopped a background pass. The next one picks up from the anchor.
         } catch {
             lastError = error.localizedDescription
         }
@@ -142,7 +150,8 @@ final class SyncCoordinator {
         await load()
         guard isSetUp else { return }
         // After a reinstall, give the ledger a chance to come back from iCloud first.
-        _ = await cloudImport.waitForInitialImport()
+        isWaitingForICloudImport = await !cloudImport.isSafeToWrite(with: calendar.accessMode())
+        guard !isWaitingForICloudImport else { return }
         do {
             _ = try await runner.syncChanges()
             isWaitingForUnlock = false
@@ -150,6 +159,8 @@ final class SyncCoordinator {
             // A pass after upgrading from add-only access names the default calendar.
             settings = await settingsStore.load()
             lastError = nil
+        } catch is CancellationError {
+            // Stopped between workouts. The anchor didn't move, so the next pass finishes it.
         } catch WorkoutSourceError.locked {
             isWaitingForUnlock = true
         } catch CalendarStoreError.calendarNotFound(let id) where id == settings.destinationCalendar?.id {

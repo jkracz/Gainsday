@@ -353,8 +353,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Gainsday/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Gainsday;
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Gainsday adds your workouts to your calendar and avoids creating duplicates.";
-				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Gainsday adds your workouts to the calendar you choose.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Gainsday adds your workouts to the calendar you choose. It reads your events to avoid duplicates and, if you turn it on, to update events you planned for a workout.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Gainsday adds your workouts to your default calendar.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Gainsday reads your workouts to add them to your calendar.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -398,8 +398,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Gainsday/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Gainsday;
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Gainsday adds your workouts to your calendar and avoids creating duplicates.";
-				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Gainsday adds your workouts to the calendar you choose.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Gainsday adds your workouts to the calendar you choose. It reads your events to avoid duplicates and, if you turn it on, to update events you planned for a workout.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Gainsday adds your workouts to your default calendar.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Gainsday reads your workouts to add them to your calendar.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;

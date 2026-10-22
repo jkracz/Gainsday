@@ -41,12 +41,14 @@ final class SetupModel {
         step != .matching || !isAddOnly
     }
 
-    /// Shows Health's permission sheet, then turns on background delivery, which
-    /// fails until access has been asked for. Returns false if it couldn't be shown.
+    /// Shows Health's permission sheet, then restarts the workout observer and turns
+    /// on background delivery, which both fail until access has been asked for.
+    /// Returns false if it couldn't be shown.
     func requestHealthAccess(_ coordinator: SyncCoordinator) async -> Bool {
         do {
             try await coordinator.health.requestAuthorization()
             healthRequested = true
+            coordinator.health.restartObservingWorkouts()
             await coordinator.enableBackgroundDelivery()
             return true
         } catch {

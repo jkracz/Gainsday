@@ -49,6 +49,9 @@ extension SyncEngine {
         var actions = notAllowed.sorted { $0.start < $1.start }.map { SyncAction.skip(workoutID: $0.id, .sourceNotAllowed) }
         let search = PlannedEventSearch()
         for cluster in WorkoutCluster.clusters(of: allowed) {
+            // A cancelled pass, e.g. a background task out of time, stops between
+            // workouts, never between an event and its ledger entry.
+            try Task.checkCancellation()
             actions.append(try await sync(cluster, to: calendarID, settings: settings, composer: composer, search: search))
         }
         return actions
