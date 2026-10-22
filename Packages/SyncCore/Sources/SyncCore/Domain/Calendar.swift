@@ -55,7 +55,7 @@ public enum EventAvailability: String, Codable, Sendable {
     case notSupported
 }
 
-/// The fields of an event the app writes and compares against the ledger snapshot.
+/// The fields of an event the app writes and compares against the ledger's fingerprint.
 public struct EventContent: Hashable, Codable, Sendable {
     public var title: String
     public var start: Date

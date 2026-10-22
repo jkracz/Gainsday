@@ -18,7 +18,7 @@ extension SyncEngine {
             workoutEnd: workout.end,
             state: .owned,
             calendarID: draft.calendarID,
-            written: draft.content,
+            writtenFingerprint: draft.content.fingerprint,
             createdAt: now,
             updatedAt: now,
             activityType: workout.activityType,
@@ -36,7 +36,7 @@ extension SyncEngine {
         // full access finds this one by its footer.
         entry.eventExternalIdentifier = event.id
         entry.calendarID = event.calendarID
-        entry.written = event.content
+        entry.writtenFingerprint = event.content.fingerprint
         try await ledger.save(entry)
         return .create(workoutID: workout.id, draft)
     }
@@ -47,7 +47,7 @@ extension SyncEngine {
     /// the Health deletes and replacements the app couldn't apply in add-only mode. Each
     /// marker is cleared only once its work is saved, so a failed pass retries it.
     ///
-    /// The snapshot of what the app wrote is kept, so edits the user made in the
+    /// The fingerprint of what the app wrote is kept, so edits the user made in the
     /// meantime are still spotted later. An event that can't be found is left to the
     /// lifecycle rules, which treat it as deleted by the user.
     func linkEventsAddedWithoutReadAccess(settings: Settings, composer: EventComposer) async throws -> [SyncAction] {
@@ -63,8 +63,8 @@ extension SyncEngine {
                     entry.calendarID = settings.destinationCalendar?.id
                 }
                 if entry.state == .owned, let calendarID = entry.calendarID,
-                   let expected = entry.written,
-                   let event = try await findOwnEvent(for: entry.memberIDs.union([entry.workoutID]), matching: expected, in: calendarID, knownID: entry.eventExternalIdentifier),
+                   entry.writtenFingerprint != nil,
+                   let event = try await findOwnEvent(for: entry.memberIDs.union([entry.workoutID]), matching: ExpectedEvent(entry), in: calendarID, knownID: entry.eventExternalIdentifier),
                    event.id != entry.eventExternalIdentifier {
                     entry.eventExternalIdentifier = event.id
                     actions.append(.relink(workoutID: entry.workoutID, eventID: event.id))

@@ -49,7 +49,7 @@ extension SyncEngine {
             tombstone.state = .tombstoned
             tombstone.eventExternalIdentifier = nil
             tombstone.calendarID = nil
-            tombstone.written = nil
+            tombstone.writtenFingerprint = nil
             tombstone.preUpdate = nil
             tombstone.createdAt = now
             tombstone.updatedAt = now

@@ -30,7 +30,7 @@ struct ManualMatchTests {
         #expect(entry.state == .adopted)
         #expect(entry.workoutID == workout.id)
         #expect(entry.eventExternalIdentifier == planned.id)
-        #expect(entry.written == event.content)
+        #expect(entry.writtenFingerprint == event.content.fingerprint)
         #expect(entry.preUpdate == planned.content)
 
         #expect(matched.action == .adopt(workoutID: workout.id, eventID: planned.id, event.content, decidedBy: .user))
@@ -66,7 +66,7 @@ struct ManualMatchTests {
         #expect(entry.state == .owned)
         #expect(entry.workoutID == workout.id)
         #expect(entry.eventExternalIdentifier == restored.id)
-        #expect(entry.written == restored.content)
+        #expect(entry.writtenFingerprint == restored.content.fingerprint)
         #expect(entry.preUpdate == nil)
 
         #expect(undone.undoneAt == SyncHarness.now)
@@ -144,6 +144,23 @@ struct ManualMatchTests {
         await #expect(throws: ManualMatchError.notMatchable) {
             try await second.0.engine.match(entryID: second.created.id, toEventID: "anything")
         }
+    }
+
+    @Test("A workout whose separate event the user deleted since the last pass can't be matched, and nothing changes")
+    func deletedSeparateEventIsNotMatchable() async throws {
+        let workout = SyncHarness.run(from: (10, 10), to: (11, 5))
+        let (harness, created, separate) = try await SyncHarness.withSeparateEvent(for: [workout])
+        let planned = SyncHarness.planned("Run", from: (10, 0), to: (11, 0))
+        await harness.calendar.put(planned)
+        await harness.calendar.remove(eventID: separate.id)
+        let ledger = await harness.ledger.allEntries
+
+        // The ledger keeps no copy of the event, so its Undo couldn't add it back.
+        await #expect(throws: ManualMatchError.notMatchable) {
+            try await harness.engine.match(entryID: created.id, toEventID: planned.id)
+        }
+        #expect(await harness.calendar.allEvents == [planned])
+        #expect(await harness.ledger.allEntries == ledger)
     }
 
     @Test("Copies of the workout from other apps stay recorded with the plan")

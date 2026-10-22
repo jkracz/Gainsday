@@ -52,17 +52,20 @@ public struct SyncEngine: Sendable {
             let changes = try await readChanges(since: anchor)
             let recorder = try await ActivityRecorder(engine: self, added: changes.added, deletedIDs: changes.deletedIDs)
             let composer = EventComposer(settings: settings, clock: clock)
-            let linked = try await linkEventsAddedWithoutReadAccess(settings: settings, composer: composer)
-            // A copy from an app the allowlist leaves out never replaces a deleted workout.
-            let (allowed, notAllowed) = settings.splitBySource(changes.added)
-            let skipped = notAllowed.map { SyncAction.skip(workoutID: $0.id, .sourceNotAllowed) }
-            let followed = try await followDeletions(
-                in: WorkoutChanges(added: allowed, deletedIDs: changes.deletedIDs, anchor: changes.anchor),
-                settings: settings,
-                composer: composer
-            )
-            let added = try await syncAdded(followed.remaining, to: destination.id, settings: settings, composer: composer)
-            return await notifyHeldWorkouts(in: recorder.record(SyncResult(actions: linked + skipped + followed.actions + added, nextAnchor: changes.anchor)))
+            let actions = try await recorder.capturingChanges {
+                let linked = try await linkEventsAddedWithoutReadAccess(settings: settings, composer: composer)
+                // A copy from an app the allowlist leaves out never replaces a deleted workout.
+                let (allowed, notAllowed) = settings.splitBySource(changes.added)
+                let skipped = notAllowed.map { SyncAction.skip(workoutID: $0.id, .sourceNotAllowed) }
+                let followed = try await followDeletions(
+                    in: WorkoutChanges(added: allowed, deletedIDs: changes.deletedIDs, anchor: changes.anchor),
+                    settings: settings,
+                    composer: composer
+                )
+                let added = try await syncAdded(followed.remaining, to: destination.id, settings: settings, composer: composer)
+                return linked + skipped + followed.actions + added
+            }
+            return await notifyHeldWorkouts(in: recorder.record(SyncResult(actions: actions, nextAnchor: changes.anchor)))
         case .backfill(let interval, let mode):
             return try await backfill(interval, mode: mode)
         }
@@ -104,7 +107,7 @@ public struct SyncEngine: Sendable {
                 state: .owned,
                 eventExternalIdentifier: event.id,
                 calendarID: event.calendarID,
-                written: event.content,
+                writtenFingerprint: event.content.fingerprint,
                 createdAt: now,
                 updatedAt: now,
                 activityType: workout.activityType

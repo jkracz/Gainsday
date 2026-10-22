@@ -91,7 +91,7 @@ struct AdoptedLifecycleTests {
         #expect(await harness.ledger.allEntries.count == 1)
         #expect(entry.state == .adopted)
         #expect(entry.workoutID == replacement.id)
-        #expect(entry.written == event.content)
+        #expect(entry.writtenFingerprint == event.content.fingerprint)
         #expect(entry.preUpdate == planned.content)
     }
 }

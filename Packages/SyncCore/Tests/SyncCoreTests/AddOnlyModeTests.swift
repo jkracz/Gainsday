@@ -40,7 +40,7 @@ struct AddOnlyModeTests {
         #expect(await harness.ledger.allEntries.count == 1)
         #expect(entry.state == .owned)
         #expect(entry.eventExternalIdentifier == "after-server-sync")
-        #expect(entry.written == written.content)
+        #expect(entry.writtenFingerprint == written.content.fingerprint)
         #expect(!entry.needsLinking)
         #expect(result.actions == [.relink(workoutID: workout.id, eventID: "after-server-sync")])
 
@@ -143,7 +143,7 @@ struct AddOnlyModeTests {
         #expect(event.content.notes?.hasSuffix(replacement.shortID) == true)
         #expect(upgraded.actions == [.update(workoutID: replacement.id, eventID: written.id, event.content)])
         let entry = try #require(await harness.ledger.allEntries.first)
-        #expect(entry.written == event.content)
+        #expect(entry.writtenFingerprint == event.content.fingerprint)
 
         let again = try await harness.engine.run(.changes(since: upgraded.nextAnchor))
         #expect(again.actions.isEmpty)

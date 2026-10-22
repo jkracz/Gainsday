@@ -46,7 +46,7 @@ struct LifecycleTests {
         #expect(entry.covers(original.id) == false)
         #expect(entry.workoutStart == replacement.start)
         #expect(entry.workoutEnd == replacement.end)
-        #expect(entry.written == updated.content)
+        #expect(entry.writtenFingerprint == updated.content.fingerprint)
         #expect(entry.createdAt == SyncHarness.now)
     }
 

@@ -41,20 +41,18 @@ extension SyncEngine {
         )
         let updated = try await calendar.update(eventID: eventID, to: content)
         entry.eventExternalIdentifier = updated.id
-        entry.written = updated.content
+        entry.writtenFingerprint = updated.content.fingerprint
         try await ledger.save(entry)
         return .update(workoutID: workout.id, eventID: updated.id, updated.content)
     }
 }
 
 extension LedgerEntry {
-    /// Whether an adopted event still has the time and workout section the app wrote.
-    /// Times are compared to the second, since calendar stores may drop sub-second
-    /// precision. With no snapshot, assume the user changed it.
+    /// Whether an adopted event still has the time and workout section the app wrote,
+    /// by the fingerprint of them (see `ContentFingerprint`). With no fingerprint,
+    /// assume the user changed it.
     func adoptedEventIsAsWritten(_ content: EventContent) -> Bool {
-        guard let written else { return false }
-        return abs(content.start.timeIntervalSince(written.start)) < 1
-            && abs(content.end.timeIntervalSince(written.end)) < 1
-            && WorkoutSection.text(in: content.notes) == WorkoutSection.text(in: written.notes)
+        guard let writtenFingerprint else { return false }
+        return content.fingerprint.timesAndSection == writtenFingerprint.timesAndSection
     }
 }

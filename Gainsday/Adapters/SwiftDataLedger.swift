@@ -17,9 +17,14 @@ nonisolated final class LedgerRecord {
     var state: String = LedgerEntry.State.owned.rawValue
     var eventExternalIdentifier: String?
     var calendarID: String?
-    /// JSON-encoded `EventContent`.
+    /// `ContentFingerprint.storageValue`: a digest of what the app wrote, never the text.
+    var writtenFingerprint: String?
+    /// What earlier versions kept instead of the fingerprint: the JSON-encoded
+    /// `EventContent` the app wrote, which holds Health data. Kept so their records
+    /// still decode, but never written: every save clears it, and the ledger scrubs
+    /// any left on first use (see `SwiftDataLedger.scrubLegacyContent`).
     var written: Data?
-    /// JSON-encoded `EventContent`.
+    /// JSON-encoded `EventContent`: the user's own plan, before the app adopted it.
     var preUpdate: Data?
     var createdAt: Date = Date.distantPast
     var updatedAt: Date = Date.distantPast
@@ -41,7 +46,8 @@ nonisolated final class LedgerRecord {
         state = entry.state.rawValue
         eventExternalIdentifier = entry.eventExternalIdentifier
         calendarID = entry.calendarID
-        written = entry.written.flatMap { try? JSONEncoder().encode($0) }
+        writtenFingerprint = entry.writtenFingerprint?.storageValue
+        written = nil
         preUpdate = entry.preUpdate.flatMap { try? JSONEncoder().encode($0) }
         createdAt = entry.createdAt
         updatedAt = entry.updatedAt
@@ -61,7 +67,8 @@ nonisolated final class LedgerRecord {
             state: LedgerEntry.State(rawValue: state) ?? .released,
             eventExternalIdentifier: eventExternalIdentifier,
             calendarID: calendarID,
-            written: written.flatMap { try? JSONDecoder().decode(EventContent.self, from: $0) },
+            writtenFingerprint: writtenFingerprint.flatMap(ContentFingerprint.init(storageValue:))
+                ?? written.flatMap { try? JSONDecoder().decode(EventContent.self, from: $0) }?.fingerprint,
             preUpdate: preUpdate.flatMap { try? JSONDecoder().decode(EventContent.self, from: $0) },
             createdAt: createdAt,
             updatedAt: updatedAt,
@@ -80,7 +87,19 @@ nonisolated final class LedgerRecord {
 actor SwiftDataLedger: Ledger {
     let modelContainer: ModelContainer
     /// Made on first use, on this actor, so it isn't tied to the main thread.
-    private lazy var modelContext = ModelContext(modelContainer)
+    private lazy var context = ModelContext(modelContainer)
+    private var legacyContentScrubbed = false
+
+    /// The context, once records earlier versions wrote have been scrubbed.
+    private var modelContext: ModelContext {
+        if !legacyContentScrubbed {
+            legacyContentScrubbed = true
+            // Best effort: a record left over is read correctly, and scrubbed when
+            // it's next saved or on the next launch.
+            try? scrubLegacyContent()
+        }
+        return context
+    }
 
     init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
@@ -133,6 +152,23 @@ actor SwiftDataLedger: Ledger {
         guard let record = try record(withID: entryID) else { return }
         modelContext.delete(record)
         try saveOrRollBack()
+    }
+
+    /// Re-saves each record an earlier version wrote with the event's text, so the
+    /// text leaves iCloud without waiting for the entry to change. Nothing else
+    /// changes, `updatedAt` included. Cheap once done: the fetch finds nothing.
+    private func scrubLegacyContent() throws {
+        let records = try context.fetch(FetchDescriptor<LedgerRecord>(predicate: #Predicate { $0.written != nil }))
+        guard !records.isEmpty else { return }
+        for record in records {
+            record.update(from: record.entry)
+        }
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
     }
 
     /// Saves, or discards the unsaved change if that fails. Fetches include unsaved

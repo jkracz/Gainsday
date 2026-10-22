@@ -6,10 +6,12 @@ import Testing
 
 @Suite("SwiftData ledger")
 struct SwiftDataLedgerTests {
+    let container: ModelContainer
     let ledger: SwiftDataLedger
 
     init() throws {
-        ledger = SwiftDataLedger(modelContainer: try SwiftDataLedger.makeContainer(inMemory: true))
+        container = try SwiftDataLedger.makeContainer(inMemory: true)
+        ledger = SwiftDataLedger(modelContainer: container)
     }
 
     static func entry(workoutID: UUID = UUID(), memberIDs: Set<UUID> = [], start: Date, minutes: Double = 30) -> LedgerEntry {
@@ -21,7 +23,7 @@ struct SwiftDataLedgerTests {
             state: .owned,
             eventExternalIdentifier: "event-1",
             calendarID: "workouts",
-            written: EventContent(title: "🏃 Running", start: start, end: start.addingTimeInterval(minutes * 60), notes: "Notes"),
+            writtenFingerprint: EventContent(title: "🏃 Running", start: start, end: start.addingTimeInterval(minutes * 60), notes: "Notes").fingerprint,
             createdAt: start,
             updatedAt: start,
             activityType: .running
@@ -37,6 +39,57 @@ struct SwiftDataLedgerTests {
         try await ledger.save(entry)
 
         #expect(try await ledger.entries(forWorkout: entry.workoutID) == [entry])
+    }
+
+    @Test("An entry is stored with a fingerprint of what the app wrote, never the event's text")
+    func storesFingerprintOnly() async throws {
+        let entry = Self.entry(start: .now)
+
+        try await ledger.save(entry)
+
+        let records = try ModelContext(container).fetch(FetchDescriptor<LedgerRecord>())
+        #expect(records.map(\.written) == [nil])
+        #expect(records.map(\.writtenFingerprint) == [entry.writtenFingerprint?.storageValue])
+    }
+
+    @Test("A record an earlier version stored with the event's text is read with its fingerprint, and the text is scrubbed on first use")
+    func migratesAndScrubsLegacyRecord() async throws {
+        let (legacy, content) = try Self.insertLegacyRecord(into: container)
+
+        let entries = try await ledger.entries(forWorkout: legacy.workoutID)
+
+        #expect(entries.map(\.writtenFingerprint) == [content.fingerprint])
+        let records = try ModelContext(container).fetch(FetchDescriptor<LedgerRecord>())
+        #expect(records.map(\.written) == [nil])
+        #expect(records.map(\.writtenFingerprint) == [content.fingerprint.storageValue])
+        #expect(records.map(\.updatedAt) == [legacy.updatedAt])
+    }
+
+    @Test("A legacy record iCloud brings in after first use is still read with its fingerprint, and scrubbed by the next launch")
+    func scrubsLateImportNextLaunch() async throws {
+        _ = try await ledger.entries(in: DateInterval(start: .distantPast, end: .distantFuture))
+        let (legacy, content) = try Self.insertLegacyRecord(into: container)
+
+        #expect(try await ledger.entry(withID: legacy.entryID)?.writtenFingerprint == content.fingerprint)
+
+        let nextLaunch = SwiftDataLedger(modelContainer: container)
+        _ = try await nextLaunch.entries(in: DateInterval(start: .distantPast, end: .distantFuture))
+        let records = try ModelContext(container).fetch(FetchDescriptor<LedgerRecord>())
+        #expect(records.map(\.written) == [nil])
+        #expect(records.map(\.writtenFingerprint) == [content.fingerprint.storageValue])
+    }
+
+    /// A record as an earlier version wrote it: the event's content as JSON, and no fingerprint.
+    static func insertLegacyRecord(into container: ModelContainer) throws -> (LedgerRecord, EventContent) {
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        let content = EventContent(title: "🏃 Running · 10.02 km", start: start, end: start.addingTimeInterval(1800), notes: "Avg heart rate: 152 bpm")
+        let context = ModelContext(container)
+        let record = LedgerRecord(entry(start: start))
+        record.writtenFingerprint = nil
+        record.written = try JSONEncoder().encode(content)
+        context.insert(record)
+        try context.save()
+        return (record, content)
     }
 
     @Test("An entry is found by any member of its cluster")

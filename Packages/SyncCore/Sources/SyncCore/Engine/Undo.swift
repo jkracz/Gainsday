@@ -138,7 +138,7 @@ extension SyncEngine {
             state: .released,
             eventExternalIdentifier: event.id,
             calendarID: event.calendarID,
-            written: event.content,
+            writtenFingerprint: event.content.fingerprint,
             createdAt: now,
             updatedAt: now,
             activityType: logEntry.activityType
@@ -156,7 +156,7 @@ extension SyncEngine {
         let restored = try await calendar.update(eventID: event.id, to: content)
         entry.state = .released
         entry.eventExternalIdentifier = restored.id
-        entry.written = restored.content
+        entry.writtenFingerprint = restored.content.fingerprint
         entry.updatedAt = clock.now
         try await ledger.save(entry)
     }
@@ -200,7 +200,7 @@ extension SyncEngine {
         guard let eventID = entry.eventExternalIdentifier, let event = try await calendar.event(withID: eventID) else {
             return (entry, nil)
         }
-        let asWritten = state == .adopted ? entry.adoptedEventIsAsWritten(event.content) : event.content.matches(entry.written)
+        let asWritten = state == .adopted ? entry.adoptedEventIsAsWritten(event.content) : event.content.matches(entry.writtenFingerprint)
         // Changing an event with guests can email every one of them.
         guard asWritten, event.attendeeCount == 0 else {
             entry.state = .released
