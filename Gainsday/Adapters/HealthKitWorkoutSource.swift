@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import Synchronization
 import SyncCore
 
 /// Reads workouts and their metrics from HealthKit. Read only: the app never writes to Health.
@@ -9,8 +10,12 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
         var errorDescription: String? { String(localized: "Health isn't available on this device.") }
     }
 
+    typealias WorkoutChangeHandler = @Sendable (_ finished: @escaping @Sendable () -> Void) -> Void
+
     let isHealthDataAvailable: Bool
     private let store: HKHealthStore
+    /// The running observer query and its handler, so it can be run again.
+    private let observer = Mutex<(query: HKObserverQuery, onChange: WorkoutChangeHandler)?>(nil)
 
     init(store: HKHealthStore = HKHealthStore(), isHealthDataAvailable: Bool = HKHealthStore.isHealthDataAvailable()) {
         self.store = store
@@ -45,15 +50,35 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
     /// Health launches the app in the background. Start this early in launch, or a
     /// background launch isn't delivered. `onChange` must call `finished` once it has
     /// synced, or Health wakes the app less often.
-    func observeWorkouts(onChange: @escaping @Sendable (_ finished: @escaping @Sendable () -> Void) -> Void) {
+    func observeWorkouts(onChange: @escaping WorkoutChangeHandler) {
         guard isHealthDataAvailable else { return }
-        let query = HKObserverQuery(sampleType: .workoutType(), predicate: nil) { _, completionHandler, error in
+        let query = Self.observerQuery(onChange)
+        observer.withLock { $0 = (query, onChange) }
+        store.execute(query)
+    }
+
+    /// Runs the observer query again. On a fresh install it starts before Health access
+    /// has been asked for, fails, and HealthKit never runs it again, so setup calls this
+    /// once it has asked.
+    func restartObservingWorkouts() {
+        let queries = observer.withLock { observer -> (old: HKObserverQuery, new: HKObserverQuery)? in
+            guard let running = observer else { return nil }
+            let restarted = Self.observerQuery(running.onChange)
+            observer = (restarted, running.onChange)
+            return (running.query, restarted)
+        }
+        guard let queries else { return }
+        store.stop(queries.old)
+        store.execute(queries.new)
+    }
+
+    private static func observerQuery(_ onChange: @escaping WorkoutChangeHandler) -> HKObserverQuery {
+        HKObserverQuery(sampleType: .workoutType(), predicate: nil) { _, completionHandler, error in
             guard error == nil else { return completionHandler() }
             // HealthKit lets the handler be called from any thread, but doesn't mark it Sendable.
             nonisolated(unsafe) let completionHandler = completionHandler
             onChange { completionHandler() }
         }
-        store.execute(query)
     }
 
     func changes(since anchor: WorkoutAnchor?) async throws -> WorkoutChanges {
