@@ -37,7 +37,8 @@ struct ActivityRecorder {
         self.before = before
     }
 
-    /// Adds the result's actions to the top of the log, keeping it to its capacity.
+    /// Adds the result's actions to the top of the log, keeping it to its capacity
+    /// apart from workouts still held for review.
     func record(_ result: SyncResult) async -> SyncResult {
         let syncStartDate = await engine.settings.load().syncStartDate
         var recorded: [ActivityLogEntry] = []
@@ -51,7 +52,7 @@ struct ActivityRecorder {
         for case .release(let workoutID, let eventID) in result.actions {
             log = log.map { $0.lettingGoOfEvent(eventID, workoutID: workoutID) }
         }
-        try? await engine.activityLog.save(Array((recorded.reversed() + log).prefix(ActivityLogEntry.capacity)))
+        try? await engine.activityLog.save((recorded.reversed() + log).trimmedToCapacity())
         return result
     }
 

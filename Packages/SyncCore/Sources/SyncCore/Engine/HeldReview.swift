@@ -11,6 +11,14 @@ extension ActivityLogEntry {
     public var canAddAsSeparateEvent: Bool { isAwaitingReview }
 }
 
+extension [ActivityLogEntry] {
+    /// The newest entries, up to the log's capacity, plus any older workouts still held
+    /// for review: a held workout exists only as its log entry, so it's never dropped.
+    func trimmedToCapacity() -> [ActivityLogEntry] {
+        enumerated().filter { $0.offset < ActivityLogEntry.capacity || $0.element.isAwaitingReview }.map(\.element)
+    }
+}
+
 /// Settling a workout held for review: the user matches it to a plan (see `match`)
 /// or adds it as a separate event. Either can be undone, and the workout waits for
 /// review again. [v1.1]

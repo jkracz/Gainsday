@@ -140,7 +140,7 @@ extension SyncEngine {
                 log[index].undo = nil
             }
         }
-        try await activityLog.save(Array(([entry] + log).prefix(ActivityLogEntry.capacity)))
+        try await activityLog.save(([entry] + log).trimmedToCapacity())
         return entry
     }
 

@@ -5,7 +5,8 @@ import Foundation
 /// Each entry wraps the `SyncAction` a pass took, plus what the log needs to show it
 /// and, when the action can be reversed, how to undo it.
 public struct ActivityLogEntry: Identifiable, Hashable, Codable, Sendable {
-    /// About how many entries the log keeps. Older ones are dropped.
+    /// About how many entries the log keeps. Older ones are dropped, except workouts
+    /// still held for review.
     public static let capacity = 50
 
     public var id: UUID
