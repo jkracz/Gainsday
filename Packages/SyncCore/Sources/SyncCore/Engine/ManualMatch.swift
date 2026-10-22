@@ -11,6 +11,9 @@ public enum ManualMatchError: Error, Hashable, Sendable {
     case workoutNotFound
     /// The workout wasn't added as an event, e.g. because the filters now leave it out.
     case notAdded(SkipReason)
+    /// The user edited the workout's separate event, so it's theirs now and the app
+    /// won't remove it. The entry can't be matched or undone any more.
+    case eventEditedByUser
 }
 
 extension ActivityLogEntry {
@@ -68,6 +71,10 @@ extension SyncEngine {
             // What the separate event holds now, so Undo can add it back as it was.
             if let separateID = ledgerEntry.eventExternalIdentifier {
                 separate = try await calendar.event(withID: separateID)
+            }
+            if let separate, !separate.content.matches(ledgerEntry.written) {
+                try await release(ledgerEntry, from: workout)
+                throw ManualMatchError.eventEditedByUser
             }
             guard let content = separate?.content ?? ledgerEntry.written,
                   let calendarID = separate?.calendarID ?? ledgerEntry.calendarID else { throw ManualMatchError.notMatchable }
@@ -142,6 +149,20 @@ extension SyncEngine {
         }
         try await activityLog.save(Array(([entry] + log).prefix(ActivityLogEntry.capacity)))
         return entry
+    }
+
+    /// Lets go of a separate event the user edited: it's theirs now, so its create can't
+    /// be matched or undone any more.
+    private func release(_ ledgerEntry: LedgerEntry, from workout: SettlingWorkout) async throws {
+        var ledgerEntry = ledgerEntry
+        ledgerEntry.state = .released
+        ledgerEntry.updatedAt = clock.now
+        try await ledger.save(ledgerEntry)
+        var log = try await activityLog.load()
+        if let index = log.firstIndex(where: { $0.id == workout.logEntry.id }) {
+            log[index].undo = nil
+            try await activityLog.save(log)
+        }
     }
 
     private func matchCandidates(for workout: SettlingWorkout) async throws -> [CalendarEvent] {
