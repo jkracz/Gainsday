@@ -140,7 +140,9 @@ extension SyncEngine {
                 log[index].undo = nil
             }
         }
-        try await activityLog.save(Array(([entry] + log).prefix(ActivityLogEntry.capacity)))
+        let settled = Array(([entry] + log).prefix(ActivityLogEntry.capacity))
+        try await activityLog.save(settled)
+        await withdrawReviewNotification(ifNoneAwaitingIn: settled)
         return entry
     }
 
