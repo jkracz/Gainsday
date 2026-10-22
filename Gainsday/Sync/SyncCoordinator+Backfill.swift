@@ -69,7 +69,9 @@ extension SyncCoordinator {
         defer { runningPasses -= 1 }
         return try await withTimeout(Self.passTimeout * 2) {
             // After a reinstall, give the ledger a chance to come back from iCloud first.
-            _ = await self.cloudImport.waitForInitialImport()
+            guard await self.cloudImport.isSafeToWrite(with: self.calendar.accessMode()) else {
+                throw WaitingForICloudImport()
+            }
             return try await self.runner.backfill(interval, mode: mode)
         }
     }

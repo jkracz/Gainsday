@@ -20,6 +20,8 @@ final class SyncCoordinator {
     var isSyncing: Bool { runningPasses > 0 }
     /// A pass found the phone locked. It runs again once the phone is unlocked.
     var isWaitingForUnlock = false
+    /// With add-only access, passes write nothing until the ledger has come back from iCloud.
+    private(set) var isWaitingForICloudImport = false
     var lastPass: Pass?
     var lastError: String?
     /// The activity log, newest first.
@@ -144,7 +146,8 @@ final class SyncCoordinator {
         await load()
         guard isSetUp else { return }
         // After a reinstall, give the ledger a chance to come back from iCloud first.
-        _ = await cloudImport.waitForInitialImport()
+        isWaitingForICloudImport = await !cloudImport.isSafeToWrite(with: calendar.accessMode())
+        guard !isWaitingForICloudImport else { return }
         do {
             _ = try await runner.syncChanges()
             isWaitingForUnlock = false

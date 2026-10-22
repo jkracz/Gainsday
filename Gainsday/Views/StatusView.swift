@@ -41,6 +41,10 @@ struct StatusView: View {
                             Text(pass.finishedAt, format: .dateTime.hour().minute())
                         }
                     }
+                    if coordinator.isWaitingForICloudImport, let waiting = WaitingForICloudImport().errorDescription {
+                        Text(verbatim: waiting)
+                            .foregroundStyle(.secondary)
+                    }
                     LabeledContent("Added Today", value: coordinator.activityLog.addedEventCount(on: coordinator.clock.now, in: coordinator.clock.calendar), format: .number)
                     if let error = coordinator.lastError {
                         Text(verbatim: error)
