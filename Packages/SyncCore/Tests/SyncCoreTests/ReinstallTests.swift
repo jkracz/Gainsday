@@ -132,7 +132,8 @@ struct ReinstallTests {
             await harness.calendar.put(try await SyncHarness.eventLeftByEarlierInstall(for: workout, id: "event"))
             for (index, entry) in arrivalOrder.enumerated() {
                 var arrived = entry
-                arrived.createdAt = SyncHarness.now.addingTimeInterval(Double(index))
+                // Both were created before the tombstone, so the owned one knew the event.
+                arrived.createdAt = SyncHarness.now.addingTimeInterval(-7200 + Double(index))
                 try await harness.ledger.save(arrived)
             }
 
@@ -140,6 +141,7 @@ struct ReinstallTests {
 
             #expect(result.actions == [.skip(workoutID: workout.id, .alreadySynced)])
             #expect(await harness.ledger.allEntries.map(\.id) == [owned.id])
+            #expect(await harness.ledger.allEntries.map(\.state) == [.owned])
             #expect(await harness.calendar.allEvents.count == 1)
         }
     }
@@ -169,6 +171,121 @@ struct ReinstallTests {
         }
         #expect(Set(survivors).count == 1)
         #expect(survivors.first != older.id)
+    }
+
+    @Test("After a reinstall, a matched plan is recovered as matched, not duplicated, and Health deleting the workout only removes its section")
+    func matchedPlanIsRecoveredAsAdopted() async throws {
+        let (harness, workout, planned, _) = try await SyncHarness.adopting()
+        let adopted = try #require(await harness.calendar.allEvents.first)
+        await harness.forgetLedger()
+
+        let recovered = try await harness.engine.run(.changes(since: nil))
+
+        #expect(recovered.actions == [.relink(workoutID: workout.id, eventID: planned.id)])
+        #expect(await harness.calendar.allEvents == [adopted])
+        let entry = try #require(await harness.ledger.allEntries.first)
+        #expect(await harness.ledger.allEntries.count == 1)
+        #expect(entry.state == .adopted)
+        #expect(entry.calendarID == SyncHarness.personal.id)
+        #expect(entry.preUpdate == nil)
+        #expect(await harness.activityLog.entries.first?.canUndo == false)
+
+        await harness.workouts.delete(workout.id)
+        _ = try await harness.engine.run(.changes(since: recovered.nextAnchor))
+
+        #expect(await harness.calendar.allEvents.map(\.content) == [
+            EventContent(title: "Run", start: workout.start, end: workout.end, notes: "Bring gels"),
+        ])
+    }
+
+    @Test("After a reinstall, a renamed matched plan with the workout's title and times is never taken for the app's own event")
+    func renamedMatchedPlanIsNotRecoveredAsOwned() async throws {
+        let workout = SyncHarness.run(from: (10, 10), to: (11, 5))
+        let harness = try await SyncHarness.matching(workouts: [workout]) { $0.renameMatchedEvents = true }
+        await harness.calendar.put(SyncHarness.planned("Morning run", from: (10, 0), to: (11, 0), in: SyncHarness.destination, notes: "Bring gels"))
+        _ = try await harness.engine.run(.changes(since: nil))
+        await harness.forgetLedger()
+
+        let recovered = try await harness.engine.run(.changes(since: nil))
+        await harness.workouts.delete(workout.id)
+        _ = try await harness.engine.run(.changes(since: recovered.nextAnchor))
+
+        #expect(await harness.calendar.allEvents.map(\.content.notes) == ["Bring gels"])
+        #expect(await harness.ledger.allEntries.isEmpty)
+    }
+
+    @Test("When a renamed matched plan's identifier changes, it's found by its workout section, and Health deleting the workout only removes the section")
+    func matchedPlanWithChangedIdentifierIsFoundBySection() async throws {
+        let (harness, workout, planned, anchor) = try await SyncHarness.adopting()
+        var renamed = try #require(await harness.calendar.allEvents.first)
+        renamed.content.title = "Tempo"
+        await harness.calendar.put(renamed)
+        await harness.calendar.changeIdentifier(of: planned.id, to: "after-server-sync")
+
+        await harness.workouts.delete(workout.id)
+        let result = try await harness.engine.run(.changes(since: anchor))
+
+        let event = try #require(await harness.calendar.allEvents.first)
+        #expect(event.id == "after-server-sync")
+        #expect(event.content.notes == "Bring gels")
+        #expect(result.actions == [.removeWorkoutSection(workoutID: workout.id, eventID: "after-server-sync", event.content)])
+        #expect(await harness.ledger.allEntries.isEmpty)
+    }
+
+    @Test("An edit released before a reinstall still holds when the old entry arrives after the event was re-linked")
+    func lateReleasedEntryKeepsTheUsersEdit() async throws {
+        let workout = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let harness = SyncHarness(workouts: [workout])
+        var edited = try await SyncHarness.eventLeftByEarlierInstall(for: workout)
+        edited.content.title = "Run with Sam"
+        await harness.calendar.put(edited)
+        let first = try await harness.engine.run(.changes(since: nil))
+        #expect(first.actions == [.relink(workoutID: workout.id, eventID: edited.id)])
+        var released = SyncHarness.ownedEntry(for: workout, eventID: edited.id, updatedAt: SyncHarness.now.addingTimeInterval(-3600))
+        released.state = .released
+        try await harness.ledger.save(released)
+
+        let replacement = SyncHarness.run(minutes: 35, minutesAgo: 5)
+        await harness.workouts.delete(workout.id)
+        await harness.workouts.add(replacement)
+        _ = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        #expect(await harness.calendar.allEvents.map(\.content.title) == ["Run with Sam"])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
+    }
+
+    @Test("An event deleted before a reinstall is deleted again when its tombstone arrives after the event was recreated")
+    func lateTombstoneDeletesRecreatedEvent() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        _ = try await harness.engine.run(.changes(since: nil))
+        var tombstone = SyncHarness.ownedEntry(for: workout, eventID: "deleted-before-reinstall", updatedAt: SyncHarness.now.addingTimeInterval(-3600))
+        tombstone.state = .tombstoned
+        try await harness.ledger.save(tombstone)
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        #expect(result.actions == [.skip(workoutID: workout.id, .tombstoned)])
+        #expect(await harness.calendar.allEvents.isEmpty)
+        #expect(await harness.ledger.allEntries.map(\.state) == [.tombstoned])
+    }
+
+    @Test("A recreated event the user has since edited is kept, and released, when the old tombstone arrives")
+    func lateTombstoneKeepsEditedRecreatedEvent() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        _ = try await harness.engine.run(.changes(since: nil))
+        var recreated = try #require(await harness.calendar.allEvents.first)
+        recreated.content.title = "Run with Sam"
+        await harness.calendar.put(recreated)
+        var tombstone = SyncHarness.ownedEntry(for: workout, eventID: "deleted-before-reinstall", updatedAt: SyncHarness.now.addingTimeInterval(-3600))
+        tombstone.state = .tombstoned
+        try await harness.ledger.save(tombstone)
+
+        _ = try await harness.engine.run(.changes(since: nil))
+
+        #expect(await harness.calendar.allEvents == [recreated])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
     }
 
     @Test("When duplicate entries link different events, the losing entry's unedited event is deleted")
@@ -290,6 +407,13 @@ extension SyncHarness {
         var event = try #require(await earlier.calendar.allEvents.first)
         event.id = id
         return event
+    }
+
+    /// Empties the ledger, as a reinstall does before iCloud brings it back.
+    func forgetLedger() async {
+        for entry in await ledger.allEntries {
+            try? await ledger.delete(entryID: entry.id)
+        }
     }
 
     /// Two devices each synced the workout before iCloud merged their ledgers: the newer

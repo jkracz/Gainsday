@@ -103,6 +103,24 @@ struct AddOnlyModeTests {
         #expect(await harness.ledger.allEntries.isEmpty)
     }
 
+    @Test("When a save fails partway through catching up a Health delete after upgrading, a retry still deletes the event")
+    func healthDeleteCatchUpSurvivesFailedSave() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout], accessMode: .addOnly)
+        let first = try await harness.engine.run(.changes(since: nil))
+        await harness.workouts.delete(workout.id)
+        let skipped = try await harness.engine.run(.changes(since: first.nextAnchor))
+
+        await harness.calendar.setAccessMode(.full)
+        await harness.ledger.failSaves(with: TestError.diskFull, afterSucceeding: 1)
+        _ = try? await harness.engine.run(.changes(since: skipped.nextAnchor))
+        await harness.ledger.resumeSaves()
+        _ = try await harness.engine.run(.changes(since: skipped.nextAnchor))
+
+        #expect(await harness.calendar.allEvents.isEmpty)
+        #expect(await harness.ledger.allEntries.isEmpty)
+    }
+
     @Test("A workout replaced in Health while the app had add-only access has its event rewritten after upgrading")
     func healthReplacementInAddOnlyModeIsCaughtUp() async throws {
         let original = SyncHarness.run(minutes: 30, minutesAgo: 10)

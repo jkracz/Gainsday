@@ -2,7 +2,8 @@ import Foundation
 
 /// Add-only mode: with EventKit write-only access the app adds events but can't read,
 /// update or delete them, so the ledger is the only way to avoid duplicates. Entries
-/// written then are marked `needsLinking`.
+/// written then are marked `needsLinking`, and entries whose Health change couldn't be
+/// applied `needsHealthFollowUp`.
 extension SyncEngine {
     /// Creates the cluster's event in add-only mode. The ledger entry, holding every
     /// member, is saved first: the app can't remove an event in this mode, so an event
@@ -43,7 +44,8 @@ extension SyncEngine {
     /// Once the user grants full access, finds each event written in add-only mode in
     /// its calendar, by identifier, footer, or title and times, and records its current
     /// identifier. Returns a relink for each entry whose identifier changed. Then applies
-    /// the Health deletes and replacements the app couldn't apply in add-only mode.
+    /// the Health deletes and replacements the app couldn't apply in add-only mode. Each
+    /// marker is cleared only once its work is saved, so a failed pass retries it.
     ///
     /// The snapshot of what the app wrote is kept, so edits the user made in the
     /// meantime are still spotted later. An event that can't be found is left to the
@@ -52,21 +54,24 @@ extension SyncEngine {
         guard await calendar.accessMode() == .full else { return [] }
         var actions: [SyncAction] = []
         for pending in try await ledger.entriesNeedingLinking() {
-            guard var entry = try await resolvedEntry(forWorkout: pending.workoutID), entry.needsLinking else { continue }
-            entry.needsLinking = false
-            if entry.calendarID == CalendarReference.defaultCalendarID {
-                // It went to the default calendar, which the destination now names.
-                entry.calendarID = settings.destinationCalendar?.id
+            guard var entry = try await resolvedEntry(forWorkout: pending.workoutID),
+                  entry.needsLinking || entry.needsHealthFollowUp else { continue }
+            if entry.needsLinking {
+                entry.needsLinking = false
+                if entry.calendarID == CalendarReference.defaultCalendarID {
+                    // It went to the default calendar, which the destination now names.
+                    entry.calendarID = settings.destinationCalendar?.id
+                }
+                if entry.state == .owned, let calendarID = entry.calendarID,
+                   let expected = entry.written,
+                   let event = try await findOwnEvent(for: entry.memberIDs.union([entry.workoutID]), matching: expected, in: calendarID, knownID: entry.eventExternalIdentifier),
+                   event.id != entry.eventExternalIdentifier {
+                    entry.eventExternalIdentifier = event.id
+                    actions.append(.relink(workoutID: entry.workoutID, eventID: event.id))
+                }
+                entry.updatedAt = clock.now
+                try await ledger.save(entry)
             }
-            if entry.state == .owned, let calendarID = entry.calendarID,
-               let expected = entry.written,
-               let event = try await findOwnEvent(for: entry.memberIDs.union([entry.workoutID]), matching: expected, in: calendarID, knownID: entry.eventExternalIdentifier),
-               event.id != entry.eventExternalIdentifier {
-                entry.eventExternalIdentifier = event.id
-                actions.append(.relink(workoutID: entry.workoutID, eventID: event.id))
-            }
-            entry.updatedAt = clock.now
-            try await ledger.save(entry)
             if entry.needsHealthFollowUp, let action = try await followUpHealthChange(to: entry, settings: settings, composer: composer) {
                 actions.append(action)
             }
@@ -78,11 +83,17 @@ extension SyncEngine {
     /// whose workout is gone from Health is deleted, and one whose workout was replaced
     /// shows the replacement's values. An event the user edited or deleted meanwhile is
     /// released or tombstoned instead, as in a pass.
+    ///
+    /// The marker is cleared in the same ledger write that records the outcome, so a
+    /// failure on the way leaves the entry queued for the next pass.
     private func followUpHealthChange(to entry: LedgerEntry, settings: Settings, composer: EventComposer) async throws -> SyncAction? {
         var entry = entry
         entry.needsHealthFollowUp = false
-        try await ledger.save(entry)
-        guard [.owned, .adopted].contains(entry.state), let eventID = entry.eventExternalIdentifier else { return nil }
+        guard [.owned, .adopted].contains(entry.state), let eventID = entry.eventExternalIdentifier else {
+            entry.updatedAt = clock.now
+            try await ledger.save(entry)
+            return nil
+        }
         let inHealth = settings.splitBySource(try await healthWorkouts(in: entry)).allowed
         if let workout = inHealth.first(where: { $0.id == entry.workoutID }) ?? inHealth.min(by: Workout.isPreferred) {
             entry.takeIdentity(from: workout)
