@@ -21,4 +21,22 @@ extension SyncEngine {
             }
         }
     }
+
+    /// With add-only access iOS adds events only to the user's default calendar, and the
+    /// app can't look up any other calendar, so after switching from full access the
+    /// destination would look deleted. It becomes the default calendar instead, as
+    /// add-only setup saves it, and upgrading again names the calendar it is. Returns
+    /// the settings, changed or not.
+    public func usingDefaultCalendarWithAddOnlyAccess() async -> Settings {
+        let current = await settings.load()
+        guard await calendar.accessMode() == .addOnly,
+              current.destinationCalendar?.isDefaultCalendar == false else {
+            return current
+        }
+        return await settings.edit { settings in
+            if settings.destinationCalendar?.isDefaultCalendar == false {
+                settings.destinationCalendar = .defaultCalendar
+            }
+        }
+    }
 }

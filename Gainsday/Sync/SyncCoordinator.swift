@@ -93,6 +93,10 @@ final class SyncCoordinator {
             await engine.report(.calendarAccessRevoked)
             forgetSetup()
         }
+        // After switching to add-only access, events can only go to the default calendar.
+        if hasFinishedSetupOnThisDevice, calendarAccess == .addOnly {
+            settings = await engine.usingDefaultCalendarWithAddOnlyAccess()
+        }
     }
 
     /// Reloads settings whenever iCloud delivers a change, since settings restored
