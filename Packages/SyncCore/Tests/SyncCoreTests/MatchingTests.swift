@@ -35,7 +35,7 @@ struct MatchingTests {
         #expect(entry.workoutID == workout.id)
         #expect(entry.eventExternalIdentifier == planned.id)
         #expect(entry.calendarID == SyncHarness.personal.id)
-        #expect(entry.written == event.content)
+        #expect(entry.writtenFingerprint == event.content.fingerprint)
         #expect(entry.preUpdate == planned.content)
     }
 
@@ -168,6 +168,20 @@ struct MatchingTests {
         #expect(result.actions.allSatisfy { if case .create = $0 { true } else { false } })
         #expect(await harness.calendar.allEvents.map(\.content.start) == [first.start, second.start])
         #expect(await harness.ledger.allEntries.map(\.state) == [.owned, .owned])
+    }
+
+    @Test("A plan already carrying a workout section, e.g. a copy of a matched event, isn't matched, so the plan kept in the ledger never holds workout data")
+    func planWithWorkoutSectionIsNotMatched() async throws {
+        let workout = SyncHarness.run(from: (10, 10), to: (11, 5))
+        let harness = try await SyncHarness.matching(workouts: [workout])
+        let copied = WorkoutSection.replacing(in: "Bring gels", with: "Distance: 10.02 km", workoutID: UUID())
+        let planned = SyncHarness.planned("Run", from: (10, 0), to: (11, 0), notes: copied)
+        await harness.calendar.put(planned)
+
+        let result = try await harness.engine.run(.changes(since: nil))
+
+        try await harness.expectSeparateEvent(for: workout, leaving: [planned], result: result)
+        #expect(await harness.ledger.allEntries.allSatisfy { $0.preUpdate == nil })
     }
 
     @Test("Plans in the destination calendar are found too")

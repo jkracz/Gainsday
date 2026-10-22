@@ -70,7 +70,7 @@ extension SyncEngine {
         if state == .tombstoned, let eventID = survivor.eventExternalIdentifier {
             guard await calendar.accessMode() == .full else { return false }
             if let event = try await calendar.event(withID: eventID) {
-                if event.content.matches(survivor.written) {
+                if event.content.matches(survivor.writtenFingerprint) {
                     try await calendar.delete(eventID: eventID)
                 } else {
                     state = .released
@@ -88,7 +88,7 @@ extension SyncEngine {
         guard entry.state == .owned, await calendar.accessMode() == .full,
               let eventID = entry.eventExternalIdentifier else { return false }
         guard let event = try await calendar.event(withID: eventID) else { return true }
-        guard event.content.matches(entry.written) else { return false }
+        guard event.content.matches(entry.writtenFingerprint) else { return false }
         try await calendar.delete(eventID: eventID)
         return true
     }

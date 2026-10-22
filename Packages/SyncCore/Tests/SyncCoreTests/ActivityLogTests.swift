@@ -153,6 +153,24 @@ struct ActivityLogTests {
         #expect(ledgerEntry.eventExternalIdentifier == restored.id)
     }
 
+    @Test("A delete logged on a device that never logged the event's create still has its title, and Undo puts the event back")
+    func undoDeleteWithoutEarlierLog() async throws {
+        let workout = SyncHarness.run()
+        let harness = SyncHarness(workouts: [workout])
+        let first = try await harness.engine.run(.changes(since: nil))
+        let original = try #require(await harness.calendar.allEvents.first)
+        // The ledger came from iCloud; this device's log is local and starts empty.
+        try await harness.activityLog.save([])
+        await harness.workouts.delete(workout.id)
+        _ = try await harness.engine.run(.changes(since: first.nextAnchor))
+        let entry = try #require(await harness.activityLog.entries.first)
+        #expect(entry.title == original.content.title)
+
+        try await harness.engine.undo(entryID: entry.id)
+
+        #expect(await harness.calendar.allEvents.map(\.content) == [original.content])
+    }
+
     @Test("Undoing an update puts back what the event held before, and a later Health delete leaves it alone")
     func undoUpdateRestoresEvent() async throws {
         let original = SyncHarness.run(minutes: 30, minutesAgo: 10)

@@ -126,7 +126,7 @@ extension SyncEngine {
                 state: .adopted,
                 eventExternalIdentifier: updated.id,
                 calendarID: updated.calendarID,
-                written: updated.content,
+                writtenFingerprint: updated.content.fingerprint,
                 preUpdate: event.content,
                 createdAt: now,
                 updatedAt: now,

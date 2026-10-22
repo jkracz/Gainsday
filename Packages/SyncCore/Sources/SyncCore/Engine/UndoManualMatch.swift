@@ -26,7 +26,7 @@ extension SyncEngine {
         entry.state = .owned
         entry.eventExternalIdentifier = separate.id
         entry.calendarID = separate.calendarID
-        entry.written = separate.content
+        entry.writtenFingerprint = separate.content.fingerprint
         entry.preUpdate = nil
         entry.updatedAt = clock.now
         try await ledger.save(entry)

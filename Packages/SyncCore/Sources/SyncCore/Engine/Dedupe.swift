@@ -16,7 +16,7 @@ extension SyncEngine {
         let state: LedgerEntry.State
         if let plan = try await findMatchedPlan(for: cluster, destination: calendarID, settings: composer.settings) {
             (event, state) = (plan, .adopted)
-        } else if let own = try await findOwnEvent(for: cluster.memberIDs, matching: composer.content(for: workout), in: calendarID) {
+        } else if let own = try await findOwnEvent(for: cluster.memberIDs, matching: ExpectedEvent(composer.content(for: workout)), in: calendarID) {
             (event, state) = (own, .owned)
         } else {
             return nil
@@ -33,7 +33,7 @@ extension SyncEngine {
             // The app doesn't know what it wrote back then. The event as it is now is
             // the baseline for spotting later user edits. A plan's content from before
             // the match is lost too, so it has no Undo.
-            written: event.content,
+            writtenFingerprint: event.content.fingerprint,
             createdAt: now,
             updatedAt: now,
             activityType: workout.activityType
@@ -63,10 +63,9 @@ extension SyncEngine {
         guard entry.state == .owned || entry.state == .adopted,
               let calendarID = entry.calendarID,
               await calendar.accessMode() == .full else { return entry }
-        let expected = entry.written ?? EventContent(title: "", start: entry.workoutStart, end: entry.workoutEnd)
         guard let event = try await findOwnEvent(
             for: entry.memberIDs.union([entry.workoutID]),
-            matching: expected,
+            matching: ExpectedEvent(entry),
             in: calendarID,
             knownID: entry.eventExternalIdentifier,
             adopted: entry.state == .adopted
@@ -80,12 +79,13 @@ extension SyncEngine {
 
     /// The app's event for the workout in the calendar, during `expected`'s times:
     /// the one with `knownID` if it's there, then by the footer's short id, then by
-    /// the same title and times (±1 min). The footer may name any of the cluster's
-    /// members. Events the ledger links to other workouts are never picked.
+    /// the same title and times (±1 min), then by exactly what was written. The footer
+    /// may name any of the cluster's members. Events the ledger links to other
+    /// workouts are never picked.
     ///
     /// A planned event the app matched is the user's, so it's never taken for an owned
     /// event. For an `adopted` entry it's found by its workout section instead.
-    func findOwnEvent(for workoutIDs: Set<UUID>, matching expected: EventContent, in calendarID: String, knownID: String? = nil, adopted: Bool = false) async throws -> CalendarEvent? {
+    func findOwnEvent(for workoutIDs: Set<UUID>, matching expected: ExpectedEvent, in calendarID: String, knownID: String? = nil, adopted: Bool = false) async throws -> CalendarEvent? {
         let window = DateInterval(start: expected.start, end: max(expected.start, expected.end))
         let candidates = try await unclaimedEvents(for: workoutIDs, during: window, in: [calendarID])
         if let known = candidates.first(where: { knownID != nil && $0.id == knownID }) {
@@ -96,7 +96,8 @@ extension SyncEngine {
         }
         let unmatched = candidates.filter { !WorkoutSection.isAnyPresent(in: $0.content.notes) }
         return unmatched.first { event in workoutIDs.contains { Footer.isPresent(in: event.content.notes, workoutID: $0) } }
-            ?? unmatched.first { $0.content.title == expected.title && Self.sameTimes($0.content, expected) }
+            ?? unmatched.first { expected.written.hasTitle($0.content.title) && Self.sameTimes($0.content, expected) }
+            ?? unmatched.first { $0.content.matches(expected.written) }
     }
 
     /// The calendars' events during `window` that the ledger doesn't link to other workouts.
@@ -109,8 +110,31 @@ extension SyncEngine {
             .sorted { ($0.content.start, $0.id) < ($1.content.start, $1.id) }
     }
 
-    private static func sameTimes(_ a: EventContent, _ b: EventContent) -> Bool {
+    private static func sameTimes(_ a: EventContent, _ b: ExpectedEvent) -> Bool {
         abs(a.start.timeIntervalSince(b.start)) <= 60 && abs(a.end.timeIntervalSince(b.end)) <= 60
+    }
+}
+
+/// What finding an event the app wrote goes on: the times it should be at, and the
+/// fingerprint of what was written, whose title part finds it by title.
+struct ExpectedEvent {
+    var start: Date
+    var end: Date
+    var written: ContentFingerprint
+
+    /// The event the app would write now.
+    init(_ content: EventContent) {
+        start = content.start
+        end = content.end
+        written = content.fingerprint
+    }
+
+    /// The event a ledger entry links, at its workout's times. The ledger keeps only a
+    /// fingerprint of the content. With none, the title is taken to be empty.
+    init(_ entry: LedgerEntry) {
+        start = entry.workoutStart
+        end = entry.workoutEnd
+        written = entry.writtenFingerprint ?? EventContent(title: "", start: entry.workoutStart, end: entry.workoutEnd).fingerprint
     }
 }
 

@@ -73,7 +73,7 @@ struct ClusteringTests {
         #expect(entry.workoutID == watchRun.id)
         #expect(entry.memberIDs == [watchRun.id, stravaRun.id])
         #expect(entry.workoutStart == watchRun.start)
-        #expect(entry.written == updated.content)
+        #expect(entry.writtenFingerprint == updated.content.fingerprint)
     }
 
     @Test("A late Watch copy's update is logged with an Undo that puts back Strava's values")
@@ -137,7 +137,7 @@ struct ClusteringTests {
         let entry = try #require(await harness.ledger.allEntries.first)
         #expect(entry.workoutID == stravaRun.id)
         #expect(entry.memberIDs == [stravaRun.id])
-        #expect(entry.written == updated.content)
+        #expect(entry.writtenFingerprint == updated.content.fingerprint)
     }
 
     @Test("Deleting the Strava copy in Health leaves the Watch's event as it is")

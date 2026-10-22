@@ -35,9 +35,13 @@ extension SyncEngine {
             }
         }
         let composer = EventComposer(settings: settings, clock: clock)
-        let recorder = mode == .commit ? try await ActivityRecorder(engine: self, added: found, deletedIDs: []) : nil
-        let result = SyncResult(actions: try await engine.syncAdded(found, to: destination.id, settings: settings, composer: composer))
-        guard let recorder else { return result }
+        guard mode == .commit else {
+            return SyncResult(actions: try await engine.syncAdded(found, to: destination.id, settings: settings, composer: composer))
+        }
+        let recorder = try await ActivityRecorder(engine: self, added: found, deletedIDs: [])
+        let result = SyncResult(actions: try await recorder.capturingChanges {
+            try await engine.syncAdded(found, to: destination.id, settings: settings, composer: composer)
+        })
         return await notifyHeldWorkouts(in: recorder.record(result))
     }
 

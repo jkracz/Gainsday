@@ -28,9 +28,11 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
     /// The event's `calendarItemExternalIdentifier`.
     public var eventExternalIdentifier: String?
     public var calendarID: String?
-    /// What the app last wrote, used to detect user edits.
-    public var written: EventContent?
-    /// For adopted events: the event before the app updated it.
+    /// A digest of what the app last wrote, used to detect user edits. The ledger
+    /// syncs to iCloud, so it never keeps the text itself, which holds Health data.
+    public var writtenFingerprint: ContentFingerprint?
+    /// For adopted events: the event before the app updated it, i.e. the user's own
+    /// plan, with no workout section.
     public var preUpdate: EventContent?
     public var createdAt: Date
     public var updatedAt: Date
@@ -55,7 +57,7 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
         state: State,
         eventExternalIdentifier: String? = nil,
         calendarID: String? = nil,
-        written: EventContent? = nil,
+        writtenFingerprint: ContentFingerprint? = nil,
         preUpdate: EventContent? = nil,
         createdAt: Date,
         updatedAt: Date,
@@ -71,7 +73,7 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
         self.state = state
         self.eventExternalIdentifier = eventExternalIdentifier
         self.calendarID = calendarID
-        self.written = written
+        self.writtenFingerprint = writtenFingerprint
         self.preUpdate = preUpdate
         self.createdAt = createdAt
         self.updatedAt = updatedAt

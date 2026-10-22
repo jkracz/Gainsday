@@ -139,7 +139,7 @@ extension SyncEngine {
         }
         let updated = try await calendar.update(eventID: eventID, to: composer.content(for: workout))
         entry.eventExternalIdentifier = updated.id
-        entry.written = updated.content
+        entry.writtenFingerprint = updated.content.fingerprint
         try await ledger.save(entry)
         return .update(workoutID: workout.id, eventID: updated.id, updated.content)
     }
@@ -171,11 +171,14 @@ extension SyncEngine {
         // Changing a planned event with guests can email every one of them, and the
         // user may have invited someone since the match.
         guard entry.state == .adopted ? entry.adoptedEventIsAsWritten(event.content) && event.attendeeCount == 0
-            : event.content.matches(entry.written) else {
+            : event.content.matches(entry.writtenFingerprint) else {
             entry.state = .released
             try await ledger.save(entry)
             return .release(workoutID: workoutID, eventID: eventID)
         }
+        // The ledger keeps only a fingerprint, so the activity log takes what the event
+        // held from here, for Undo.
+        Self.eventsBeforeChange?.record(event)
         return nil
     }
 
@@ -220,9 +223,17 @@ private extension LedgerEntry {
 }
 
 extension EventContent {
-    /// Whether the event still holds what the app wrote. Times are compared to the
-    /// second, since calendar stores may drop sub-second precision; nil and empty
-    /// notes are the same. With no snapshot, assume the user changed it.
+    /// Whether the event still holds what the app wrote, by the ledger's fingerprint
+    /// of it (see `ContentFingerprint`). With no fingerprint, assume the user changed it.
+    func matches(_ written: ContentFingerprint?) -> Bool {
+        guard let written else { return false }
+        return fingerprint.content == written.content
+    }
+
+    /// Whether the event still holds what the app wrote, as the activity log recorded
+    /// it. Times are compared to the second, since calendar stores may drop sub-second
+    /// precision; nil and empty notes are the same. With no snapshot, assume the user
+    /// changed it.
     func matches(_ written: EventContent?) -> Bool {
         guard let written else { return false }
         return title == written.title

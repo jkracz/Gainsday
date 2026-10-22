@@ -21,7 +21,7 @@ struct ReinstallTests {
         #expect(entry.state == .owned)
         #expect(entry.eventExternalIdentifier == existing.id)
         #expect(entry.calendarID == SyncHarness.destination.id)
-        #expect(entry.written == existing.content)
+        #expect(entry.writtenFingerprint == existing.content.fingerprint)
         #expect(result.actions == [.relink(workoutID: workout.id, eventID: existing.id)])
     }
 
@@ -375,7 +375,7 @@ struct ReinstallTests {
         let event = try await SyncHarness.eventLeftByEarlierInstall(for: workout)
         await harness.calendar.put(event)
         var entry = SyncHarness.ownedEntry(for: workout, eventID: event.id, updatedAt: SyncHarness.now.addingTimeInterval(-3600))
-        entry.written = event.content
+        entry.writtenFingerprint = event.content.fingerprint
         try await harness.ledger.save(entry)
         let before = await harness.ledger.allEntries
 
@@ -425,9 +425,9 @@ extension SyncHarness {
         await harness.calendar.put(kept)
         await harness.calendar.put(duplicate)
         var survivor = ownedEntry(for: workout, eventID: kept.id)
-        survivor.written = kept.content
+        survivor.writtenFingerprint = kept.content.fingerprint
         var loser = ownedEntry(for: workout, eventID: duplicate.id, updatedAt: now.addingTimeInterval(-3600))
-        loser.written = duplicate.content
+        loser.writtenFingerprint = duplicate.content.fingerprint
         try await harness.ledger.save(survivor)
         try await harness.ledger.save(loser)
         return (harness, kept, duplicate)

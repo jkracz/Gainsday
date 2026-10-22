@@ -72,13 +72,14 @@ extension SyncEngine {
             if let separateID = ledgerEntry.eventExternalIdentifier {
                 separate = try await calendar.event(withID: separateID)
             }
-            if let separate, !separate.content.matches(ledgerEntry.written) {
+            if let separate, !separate.content.matches(ledgerEntry.writtenFingerprint) {
                 try await release(ledgerEntry, from: workout)
                 throw ManualMatchError.eventEditedByUser
             }
-            guard let content = separate?.content ?? ledgerEntry.written,
-                  let calendarID = separate?.calendarID ?? ledgerEntry.calendarID else { throw ManualMatchError.notMatchable }
-            undo = .separateFromPlannedEvent(EventDraft(calendarID: calendarID, content: content), createEntryID: workout.logEntry.id)
+            // The ledger keeps only a fingerprint of the event, so one the user deleted
+            // since the last pass couldn't be added back by Undo. That pass tombstones it.
+            guard let separate else { throw ManualMatchError.notMatchable }
+            undo = .separateFromPlannedEvent(EventDraft(calendarID: separate.calendarID, content: separate.content), createEntryID: workout.logEntry.id)
         }
 
         let settings = await settings.load()
