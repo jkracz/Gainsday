@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import SyncCore
 import Testing
 @testable import Gainsday
@@ -67,6 +68,21 @@ struct SwiftDataLedgerTests {
         try await ledger.save(entry)
 
         #expect(try await ledger.entries(forWorkout: entry.workoutID).map(\.state) == [.tombstoned])
+    }
+
+    @Test("An entry that failed to save isn't returned later, so a retry doesn't take the workout as synced")
+    func failedSaveIsRolledBack() async throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "ledger-\(UUID().uuidString).store")
+        defer { try? FileManager.default.removeItem(at: url) }
+        _ = try ModelContainer(for: LedgerRecord.self, configurations: ModelConfiguration(url: url, cloudKitDatabase: .none))
+        let readOnly = ModelConfiguration(url: url, allowsSave: false, cloudKitDatabase: .none)
+        let ledger = SwiftDataLedger(modelContainer: try ModelContainer(for: LedgerRecord.self, configurations: readOnly))
+        let entry = Self.entry(start: .now)
+
+        await #expect(throws: (any Error).self) { try await ledger.save(entry) }
+
+        #expect(try await ledger.entries(forWorkout: entry.workoutID).isEmpty)
+        #expect(try await ledger.entries(in: DateInterval(start: .distantPast, end: .distantFuture)).isEmpty)
     }
 
     @Test("Entries are found by overlapping time, and can be deleted")

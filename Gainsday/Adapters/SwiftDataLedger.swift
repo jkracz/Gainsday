@@ -122,13 +122,24 @@ actor SwiftDataLedger: Ledger {
         } else {
             modelContext.insert(LedgerRecord(entry))
         }
-        try modelContext.save()
+        try saveOrRollBack()
     }
 
     func delete(entryID: UUID) async throws {
         guard let record = try record(withID: entryID) else { return }
         modelContext.delete(record)
-        try modelContext.save()
+        try saveOrRollBack()
+    }
+
+    /// Saves, or discards the unsaved change if that fails. Fetches include unsaved
+    /// changes, so otherwise a failed save would still be seen by later passes.
+    private func saveOrRollBack() throws {
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
     }
 
     /// Whether ledger work is running on the main thread. For tests (issue #26).
