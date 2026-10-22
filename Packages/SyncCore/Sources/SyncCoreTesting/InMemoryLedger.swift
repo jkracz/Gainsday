@@ -23,6 +23,10 @@ public actor InMemoryLedger: Ledger {
         allEntries.filter { $0.covers(workoutID) }
     }
 
+    public func entry(withID id: UUID) async throws -> LedgerEntry? {
+        storedEntries[id]
+    }
+
     public func entries(in interval: DateInterval) async throws -> [LedgerEntry] {
         allEntries.filter { $0.workoutStart < interval.end && $0.workoutEnd > interval.start }
     }

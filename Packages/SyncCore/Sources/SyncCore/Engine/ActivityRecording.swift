@@ -37,7 +37,8 @@ struct ActivityRecorder {
         self.before = before
     }
 
-    /// Adds the result's actions to the top of the log, keeping it to its capacity.
+    /// Adds the result's actions to the top of the log, keeping it to its capacity
+    /// apart from workouts still held for review.
     func record(_ result: SyncResult) async -> SyncResult {
         let syncStartDate = await engine.settings.load().syncStartDate
         var recorded: [ActivityLogEntry] = []
@@ -51,7 +52,7 @@ struct ActivityRecorder {
         for case .release(let workoutID, let eventID) in result.actions {
             log = log.map { $0.lettingGoOfEvent(eventID, workoutID: workoutID) }
         }
-        try? await engine.activityLog.save(Array((recorded.reversed() + log).prefix(ActivityLogEntry.capacity)))
+        try? await engine.activityLog.save((recorded.reversed() + log).trimmedToCapacity())
         return result
     }
 
@@ -91,8 +92,9 @@ struct ActivityRecorder {
         case .create(let workoutID, let draft):
             entry.title = draft.content.title
             entry.workoutStart = draft.content.start
-            entry.eventID = try? await engine.ledger.entries(forWorkout: workoutID)
-                .compactMap(\.eventExternalIdentifier).first
+            let created = try? await engine.ledger.entries(forWorkout: workoutID).first { $0.state == .owned }
+            entry.eventID = created?.eventExternalIdentifier
+            entry.ledgerEntryID = created?.id
             entry.undo = .removeCreatedEvent
         case .relink(let workoutID, _):
             if let title = try? await engine.ledger.entries(forWorkout: workoutID).compactMap(\.written?.title).first {
@@ -101,12 +103,15 @@ struct ActivityRecorder {
         case .adopt(let workoutID, _, let content, _):
             // The planned event keeps the user's title.
             entry.title = content.title
-            entry.undo = try? await engine.ledger.entries(forWorkout: workoutID)
-                .compactMap(\.preUpdate).first.map { .restorePlannedEvent($0) }
-        case .update(_, _, let content):
+            let adopted = try? await engine.ledger.entries(forWorkout: workoutID).first { $0.state == .adopted }
+            entry.ledgerEntryID = adopted?.id
+            entry.undo = adopted?.preUpdate.map { .restorePlannedEvent($0) }
+        case .update(let workoutID, let eventID, let content):
             entry.title = content.title
             // An adopted event's own Undo is on its adoption's log entry.
             entry.undo = previous?.state == .adopted ? nil : previous?.written.map { .restoreEvent($0) }
+            entry.ledgerEntryID = (try? await engine.ledger.entries(forWorkout: workoutID))?
+                .first { $0.eventExternalIdentifier == eventID }?.id ?? previous?.id
         case .removeWorkoutSection(_, _, let content):
             entry.title = content.title
         case .delete:
@@ -120,18 +125,19 @@ struct ActivityRecorder {
     }
 }
 
-private extension ActivityLogEntry {
+extension ActivityLogEntry {
     /// The entry without its Undo, if undoing it would overwrite or delete an event
-    /// the user has since edited and the app has let go of.
+    /// the user has since edited and the app has let go of. Only Undo of a delete,
+    /// which makes a new event, stays.
     func lettingGoOfEvent(_ eventID: String, workoutID: UUID) -> ActivityLogEntry {
         guard self.eventID == eventID || self.workoutID == workoutID else { return self }
         switch undo {
-        case .removeCreatedEvent, .restoreEvent:
+        case nil, .recreateEvent:
+            return self
+        default:
             var entry = self
             entry.undo = nil
             return entry
-        default:
-            return self
         }
     }
 }

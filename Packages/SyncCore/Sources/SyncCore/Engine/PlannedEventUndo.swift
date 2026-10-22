@@ -5,17 +5,26 @@ extension SyncEngine {
     /// planned it and lets go of it. Then the workout either gets its own owned event,
     /// as if no plan had matched, or is tombstoned so it's never added. [v1.1]
     ///
-    /// Works after the workout was replaced or deleted in Health too: the adoption's
-    /// ledger entry is also found by its event, and without one the log's copy of the
-    /// plan is enough. Returns what was done for the workout, for the activity log.
+    /// Works after the workout was replaced in Health too, since the adoption's ledger
+    /// entry follows the replacement. After the workout was deleted in Health, the log's
+    /// copy of the plan is enough. Only while the plan is still as the app left it.
+    /// Returns what was done for the workout, for the activity log.
     func restorePlannedEvent(
         _ planned: EventContent,
         of logEntry: ActivityLogEntry,
         choice: ActivityLogEntry.PlannedEventUndoChoice
     ) async throws -> (actions: [SyncAction], workouts: [Workout]) {
         guard case .adopt(_, let adoptedEventID, let adopted, _) = logEntry.action else { throw UndoError.notUndoable }
-        let entries = try await adoptionEntries(of: logEntry.workoutID, eventID: adoptedEventID, workoutTimes: adopted)
-        let eventID = entries.compactMap(\.eventExternalIdentifier).first ?? adoptedEventID
+        var entries: [LedgerEntry] = []
+        var eventID = adoptedEventID
+        if let target = try await undoTarget(of: logEntry) {
+            let (entry, event) = try await verified(target, of: logEntry, in: .adopted)
+            guard let event else { throw UndoError.outOfDate }
+            entries = [entry]
+            eventID = event.id
+        } else {
+            try await checkPlanLeftByDeletedWorkout(adoptedEventID, adopted: adopted)
+        }
         _ = try await calendar.update(eventID: eventID, to: planned)
 
         let now = clock.now
@@ -51,14 +60,16 @@ extension SyncEngine {
         }
     }
 
-    /// The live ledger entries for an adopted event: those covering the workout, and
-    /// those linked to the event, e.g. after a replacement in Health took over the workout.
-    private func adoptionEntries(of workoutID: UUID, eventID: String, workoutTimes: EventContent) async throws -> [LedgerEntry] {
-        let times = DateInterval(start: workoutTimes.start, end: max(workoutTimes.start, workoutTimes.end))
-        let linked = try await ledger.entries(in: times).filter { $0.eventExternalIdentifier == eventID }
-        var seen = Set<UUID>()
-        return (try await ledger.entries(forWorkout: workoutID) + linked)
-            .filter { $0.state != .tombstoned && seen.insert($0.id).inserted }
+    /// Checks a plan whose adoption's ledger entry has gone, because Health deleted the
+    /// workout and the app took its section out, can be put back: no other workout uses
+    /// it, and it's still where the workout left it, with no workout section or guests.
+    private func checkPlanLeftByDeletedWorkout(_ eventID: String, adopted: EventContent) async throws {
+        guard try await liveEntries(linkedTo: eventID, around: adopted).isEmpty,
+              let event = try await calendar.event(withID: eventID) else { throw UndoError.outOfDate }
+        guard abs(event.content.start.timeIntervalSince(adopted.start)) < 1,
+              abs(event.content.end.timeIntervalSince(adopted.end)) < 1,
+              !WorkoutSection.isAnyPresent(in: event.content.notes),
+              event.attendeeCount == 0 else { throw UndoError.eventEditedByUser }
     }
 
     /// Syncs the workout's copies still in Health as if no plan had matched.

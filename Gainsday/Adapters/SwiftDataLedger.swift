@@ -102,6 +102,10 @@ actor SwiftDataLedger: Ledger {
         return try modelContext.fetch(descriptor).map(\.entry).filter { $0.covers(workoutID) }
     }
 
+    func entry(withID id: UUID) async throws -> LedgerEntry? {
+        try record(withID: id)?.entry
+    }
+
     func entries(in interval: DateInterval) async throws -> [LedgerEntry] {
         let start = interval.start
         let end = interval.end

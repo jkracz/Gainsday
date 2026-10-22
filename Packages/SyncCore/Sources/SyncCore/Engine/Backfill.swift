@@ -129,6 +129,11 @@ private actor DryRunLedger: Ledger {
         overlaid(try await base.entries(forWorkout: workoutID)).filter { $0.covers(workoutID) }
     }
 
+    func entry(withID id: UUID) async throws -> LedgerEntry? {
+        if let changed = overlay[id] { return changed }
+        return try await base.entry(withID: id)
+    }
+
     func entries(in interval: DateInterval) async throws -> [LedgerEntry] {
         overlaid(try await base.entries(in: interval))
             .filter { $0.workoutStart < interval.end && $0.workoutEnd > interval.start }
