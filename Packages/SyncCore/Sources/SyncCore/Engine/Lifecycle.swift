@@ -168,7 +168,10 @@ extension SyncEngine {
             try await ledger.save(entry)
             return .skip(workoutID: workoutID, .tombstoned)
         }
-        guard entry.state == .adopted ? entry.adoptedEventIsAsWritten(event.content) : event.content.matches(entry.written) else {
+        // Changing a planned event with guests can email every one of them, and the
+        // user may have invited someone since the match.
+        guard entry.state == .adopted ? entry.adoptedEventIsAsWritten(event.content) && event.attendeeCount == 0
+            : event.content.matches(entry.written) else {
             entry.state = .released
             try await ledger.save(entry)
             return .release(workoutID: workoutID, eventID: eventID)

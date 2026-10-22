@@ -44,10 +44,14 @@ extension SyncEngine {
 
         switch decision {
         case .adopt(let event, let decider):
+            // The user may have changed the plan while the model judged it. Only adopt it
+            // as it was judged.
+            guard let current = try await calendar.event(withID: event.id),
+                  current.content.matches(event.content) else { return nil }
             // Changing an event with guests can email every one of them, so only the
             // user's own events are updated, whatever decided the match.
-            guard event.attendeeCount == 0 else { return nil }
-            return try await adopt(event, for: cluster, decidedBy: decider, settings: settings, composer: composer)
+            guard current.attendeeCount == 0 else { return nil }
+            return try await adopt(current, for: cluster, decidedBy: decider, settings: settings, composer: composer)
         case .separateEvent:
             return nil
         case .holdForReview:

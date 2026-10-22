@@ -11,6 +11,7 @@ struct MatchEventView: View {
     @State private var calendarTitles: [String: String] = [:]
     @State private var isMatching = false
     @State private var matchFailed = false
+    @State private var matchRefusedForEdit = false
 
     var body: some View {
         NavigationStack {
@@ -59,7 +60,11 @@ struct MatchEventView: View {
             .alert("Couldn't Match", isPresented: $matchFailed) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("The event or the workout may have changed. Check your calendar, then try again.")
+                if matchRefusedForEdit {
+                    Text("You changed this workout's event in your calendar, so it's yours now and Gainsday won't remove it.")
+                } else {
+                    Text("The event or the workout may have changed. Check your calendar, then try again.")
+                }
             }
         }
     }
@@ -77,7 +82,12 @@ struct MatchEventView: View {
             try await coordinator.match(entry, to: event)
             dismiss()
         } catch {
+            matchRefusedForEdit = error as? ManualMatchError == .eventEditedByUser
             matchFailed = true
+            if matchRefusedForEdit {
+                // The entry can't be matched any more.
+                await coordinator.refreshActivityLog()
+            }
         }
     }
 }
