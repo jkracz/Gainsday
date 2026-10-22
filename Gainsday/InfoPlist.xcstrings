@@ -32,7 +32,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Gainsday adds your workouts to your calendar and avoids creating duplicates."
+            "value" : "Gainsday adds your workouts to the calendar you choose. It reads your events to avoid duplicates and, if you turn it on, to update events you planned for a workout."
           }
         }
       }
@@ -44,7 +44,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Gainsday adds your workouts to the calendar you choose."
+            "value" : "Gainsday adds your workouts to your default calendar."
           }
         }
       }
