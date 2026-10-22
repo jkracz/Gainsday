@@ -132,6 +132,8 @@ final class SyncCoordinator {
         defer { runningPasses -= 1 }
         do {
             try await withTimeout(Self.passTimeout) { await self.runPass() }
+        } catch is CancellationError {
+            // The system stopped a background pass. The next one picks up from the anchor.
         } catch {
             lastError = error.localizedDescription
         }
@@ -150,6 +152,8 @@ final class SyncCoordinator {
             // A pass after upgrading from add-only access names the default calendar.
             settings = await settingsStore.load()
             lastError = nil
+        } catch is CancellationError {
+            // Stopped between workouts. The anchor didn't move, so the next pass finishes it.
         } catch WorkoutSourceError.locked {
             isWaitingForUnlock = true
         } catch CalendarStoreError.calendarNotFound(let id) where id == settings.destinationCalendar?.id {
