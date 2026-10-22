@@ -119,10 +119,12 @@ actor EventKitCalendarStore: CalendarStore {
             ?? store.calendarItem(withIdentifier: id) as? EKEvent
     }
 
+    /// Times are written in whole seconds, as the fingerprint compares them, so a
+    /// store that rounds rather than truncates can't make an event look edited.
     private func apply(_ content: EventContent, to event: EKEvent) {
         event.title = content.title
-        event.startDate = content.start
-        event.endDate = content.end
+        event.startDate = content.start.truncatedToSecond
+        event.endDate = content.end.truncatedToSecond
         event.notes = content.notes
     }
 
@@ -155,5 +157,12 @@ actor EventKitCalendarStore: CalendarStore {
         case .notSupported: .notSupported
         default: .busy
         }
+    }
+}
+
+private extension Date {
+    /// The same instant without its fraction of a second, matching `ContentFingerprint`.
+    var truncatedToSecond: Date {
+        Date(timeIntervalSince1970: timeIntervalSince1970.rounded(.down))
     }
 }
