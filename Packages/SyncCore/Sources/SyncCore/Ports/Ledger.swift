@@ -6,6 +6,9 @@ public protocol Ledger: Sendable {
     /// be more than one after an iCloud merge.
     func entries(forWorkout workoutID: UUID) async throws -> [LedgerEntry]
 
+    /// The entry with this `id`, or nil if there's none.
+    func entry(withID id: UUID) async throws -> LedgerEntry?
+
     /// Entries whose workout overlaps `interval`.
     func entries(in interval: DateInterval) async throws -> [LedgerEntry]
 
