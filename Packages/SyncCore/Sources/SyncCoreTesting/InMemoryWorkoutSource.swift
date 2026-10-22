@@ -9,6 +9,8 @@ public actor InMemoryWorkoutSource: WorkoutSource {
     }
 
     private var history: [Change] = []
+    private var isAccessDenied = false
+    private var isLocked = false
 
     public init(workouts: [Workout] = []) {
         history = workouts.map(Change.added)
@@ -38,7 +40,19 @@ public actor InMemoryWorkoutSource: WorkoutSource {
         history.append(.deleted(workoutID))
     }
 
+    /// Makes every read fail as if the user had turned off Health access.
+    public func setAccessDenied(_ denied: Bool) {
+        isAccessDenied = denied
+    }
+
+    /// Makes every read fail as if the phone were locked.
+    public func setLocked(_ locked: Bool) {
+        isLocked = locked
+    }
+
     public func changes(since anchor: WorkoutAnchor?) async throws -> WorkoutChanges {
+        if isAccessDenied { throw WorkoutSourceError.accessDenied }
+        if isLocked { throw WorkoutSourceError.locked }
         let start = anchor.map(Self.position) ?? 0
         var added: [Workout] = []
         var deletedIDs: [UUID] = []
@@ -58,11 +72,13 @@ public actor InMemoryWorkoutSource: WorkoutSource {
     }
 
     public func workouts(in interval: DateInterval) async throws -> [Workout] {
-        workouts.filter { interval.contains($0.start) }
+        if isAccessDenied { throw WorkoutSourceError.accessDenied }
+        return workouts.filter { interval.contains($0.start) }
     }
 
     public func recentWorkouts(limit: Int) async throws -> [Workout] {
-        Array(workouts.sorted { $0.start > $1.start }.prefix(limit))
+        if isAccessDenied { throw WorkoutSourceError.accessDenied }
+        return Array(workouts.sorted { $0.start > $1.start }.prefix(limit))
     }
 
     private static func anchor(at position: Int) -> WorkoutAnchor {

@@ -37,6 +37,17 @@ public struct CalendarReference: Hashable, Codable, Sendable {
     }
 }
 
+extension CalendarReference {
+    /// Stands for whichever calendar the user's settings send new events to. With
+    /// add-only access iOS doesn't let the app choose a calendar, or even see which
+    /// one this is, so it's the only destination there is.
+    public static let defaultCalendarID = "gainsday.default-calendar"
+    /// The UI shows its own name for it: the title is only a fallback.
+    public static let defaultCalendar = CalendarReference(id: defaultCalendarID, title: "Default Calendar")
+
+    public var isDefaultCalendar: Bool { id == Self.defaultCalendarID }
+}
+
 /// Whether an event blocks the user's time.
 public enum EventAvailability: String, Codable, Sendable {
     case busy
@@ -44,7 +55,7 @@ public enum EventAvailability: String, Codable, Sendable {
     case notSupported
 }
 
-/// The fields of an event the app writes and compares against the ledger snapshot.
+/// The fields of an event the app writes and compares against the ledger's fingerprint.
 public struct EventContent: Hashable, Codable, Sendable {
     public var title: String
     public var start: Date
@@ -84,6 +95,9 @@ public struct CalendarEvent: Identifiable, Hashable, Codable, Sendable {
     public var attendeeCount: Int
     public var isDeclinedByUser: Bool
     public var lastModified: Date?
+    /// Whether the event is an occurrence of a repeating event. Occurrences share one
+    /// external identifier, so the app can't update one of them on its own.
+    public var isRecurring: Bool
 
     public init(
         id: String,
@@ -93,7 +107,8 @@ public struct CalendarEvent: Identifiable, Hashable, Codable, Sendable {
         isAllDay: Bool = false,
         attendeeCount: Int = 0,
         isDeclinedByUser: Bool = false,
-        lastModified: Date? = nil
+        lastModified: Date? = nil,
+        isRecurring: Bool = false
     ) {
         self.id = id
         self.calendarID = calendarID
@@ -103,5 +118,6 @@ public struct CalendarEvent: Identifiable, Hashable, Codable, Sendable {
         self.attendeeCount = attendeeCount
         self.isDeclinedByUser = isDeclinedByUser
         self.lastModified = lastModified
+        self.isRecurring = isRecurring
     }
 }

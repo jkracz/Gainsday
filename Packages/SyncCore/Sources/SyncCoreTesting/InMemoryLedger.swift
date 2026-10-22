@@ -6,6 +6,7 @@ import SyncCore
 public actor InMemoryLedger: Ledger {
     private var storedEntries: [UUID: LedgerEntry] = [:]
     private var saveError: (any Error)?
+    private var savesBeforeFailing = 0
 
     public init(entries: [LedgerEntry] = []) {
         for entry in entries {
@@ -22,17 +23,35 @@ public actor InMemoryLedger: Ledger {
         allEntries.filter { $0.covers(workoutID) }
     }
 
+    public func entry(withID id: UUID) async throws -> LedgerEntry? {
+        storedEntries[id]
+    }
+
     public func entries(in interval: DateInterval) async throws -> [LedgerEntry] {
         allEntries.filter { $0.workoutStart < interval.end && $0.workoutEnd > interval.start }
     }
 
-    /// Makes every later save throw `error`, as a full disk or store failure would.
-    public func failSaves(with error: any Error) {
+    public func entriesNeedingLinking() async throws -> [LedgerEntry] {
+        allEntries.filter { $0.needsLinking || $0.needsHealthFollowUp }
+    }
+
+    /// Makes every later save throw `error`, as a full disk or store failure would,
+    /// after letting `successes` more saves through.
+    public func failSaves(with error: any Error, afterSucceeding successes: Int = 0) {
         saveError = error
+        savesBeforeFailing = successes
+    }
+
+    /// Lets saves succeed again.
+    public func resumeSaves() {
+        saveError = nil
     }
 
     public func save(_ entry: LedgerEntry) async throws {
-        if let saveError { throw saveError }
+        if let saveError {
+            guard savesBeforeFailing > 0 else { throw saveError }
+            savesBeforeFailing -= 1
+        }
         storedEntries[entry.id] = entry
     }
 

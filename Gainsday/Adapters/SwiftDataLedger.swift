@@ -17,12 +17,21 @@ nonisolated final class LedgerRecord {
     var state: String = LedgerEntry.State.owned.rawValue
     var eventExternalIdentifier: String?
     var calendarID: String?
-    /// JSON-encoded `EventContent`.
+    /// `ContentFingerprint.storageValue`: a digest of what the app wrote, never the text.
+    var writtenFingerprint: String?
+    /// What earlier versions kept instead of the fingerprint: the JSON-encoded
+    /// `EventContent` the app wrote, which holds Health data. Kept so their records
+    /// still decode, but never written: every save clears it, and the ledger scrubs
+    /// any left on first use (see `SwiftDataLedger.scrubLegacyContent`).
     var written: Data?
-    /// JSON-encoded `EventContent`.
+    /// JSON-encoded `EventContent`: the user's own plan, before the app adopted it.
     var preUpdate: Data?
     var createdAt: Date = Date.distantPast
     var updatedAt: Date = Date.distantPast
+    /// The `WorkoutActivityType` raw value.
+    var activityType: Int?
+    var needsLinking: Bool = false
+    var needsHealthFollowUp: Bool = false
 
     init(_ entry: LedgerEntry) {
         update(from: entry)
@@ -37,10 +46,14 @@ nonisolated final class LedgerRecord {
         state = entry.state.rawValue
         eventExternalIdentifier = entry.eventExternalIdentifier
         calendarID = entry.calendarID
-        written = entry.written.flatMap { try? JSONEncoder().encode($0) }
+        writtenFingerprint = entry.writtenFingerprint?.storageValue
+        written = nil
         preUpdate = entry.preUpdate.flatMap { try? JSONEncoder().encode($0) }
         createdAt = entry.createdAt
         updatedAt = entry.updatedAt
+        activityType = entry.activityType.map { Int($0.rawValue) }
+        needsLinking = entry.needsLinking
+        needsHealthFollowUp = entry.needsHealthFollowUp
     }
 
     var entry: LedgerEntry {
@@ -54,17 +67,44 @@ nonisolated final class LedgerRecord {
             state: LedgerEntry.State(rawValue: state) ?? .released,
             eventExternalIdentifier: eventExternalIdentifier,
             calendarID: calendarID,
-            written: written.flatMap { try? JSONDecoder().decode(EventContent.self, from: $0) },
+            writtenFingerprint: writtenFingerprint.flatMap(ContentFingerprint.init(storageValue:))
+                ?? written.flatMap { try? JSONDecoder().decode(EventContent.self, from: $0) }?.fingerprint,
             preUpdate: preUpdate.flatMap { try? JSONDecoder().decode(EventContent.self, from: $0) },
             createdAt: createdAt,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            activityType: activityType.flatMap { UInt(exactly: $0) }.map(WorkoutActivityType.init(rawValue:)),
+            needsLinking: needsLinking,
+            needsHealthFollowUp: needsHealthFollowUp
         )
     }
 }
 
 /// The ledger, stored with SwiftData in the user's private iCloud database.
-@ModelActor
+///
+/// A plain actor rather than `@ModelActor`: SwiftData's model executor runs work on
+/// the caller's thread, so a main-actor caller would fetch and save on the main
+/// thread (issue #26). This actor's own executor never uses the main thread.
 actor SwiftDataLedger: Ledger {
+    let modelContainer: ModelContainer
+    /// Made on first use, on this actor, so it isn't tied to the main thread.
+    private lazy var context = ModelContext(modelContainer)
+    private var legacyContentScrubbed = false
+
+    /// The context, once records earlier versions wrote have been scrubbed.
+    private var modelContext: ModelContext {
+        if !legacyContentScrubbed {
+            legacyContentScrubbed = true
+            // Best effort: a record left over is read correctly, and scrubbed when
+            // it's next saved or on the next launch.
+            try? scrubLegacyContent()
+        }
+        return context
+    }
+
+    init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+    }
+
     /// The iCloud-backed container, using the first iCloud container in the entitlements.
     static func makeContainer(inMemory: Bool = false) throws -> ModelContainer {
         let configuration = inMemory
@@ -81,6 +121,10 @@ actor SwiftDataLedger: Ledger {
         return try modelContext.fetch(descriptor).map(\.entry).filter { $0.covers(workoutID) }
     }
 
+    func entry(withID id: UUID) async throws -> LedgerEntry? {
+        try record(withID: id)?.entry
+    }
+
     func entries(in interval: DateInterval) async throws -> [LedgerEntry] {
         let start = interval.start
         let end = interval.end
@@ -90,19 +134,57 @@ actor SwiftDataLedger: Ledger {
         return try modelContext.fetch(descriptor).map(\.entry)
     }
 
+    func entriesNeedingLinking() async throws -> [LedgerEntry] {
+        let descriptor = FetchDescriptor<LedgerRecord>(predicate: #Predicate { $0.needsLinking || $0.needsHealthFollowUp })
+        return try modelContext.fetch(descriptor).map(\.entry)
+    }
+
     func save(_ entry: LedgerEntry) async throws {
         if let record = try record(withID: entry.id) {
             record.update(from: entry)
         } else {
             modelContext.insert(LedgerRecord(entry))
         }
-        try modelContext.save()
+        try saveOrRollBack()
     }
 
     func delete(entryID: UUID) async throws {
         guard let record = try record(withID: entryID) else { return }
         modelContext.delete(record)
-        try modelContext.save()
+        try saveOrRollBack()
+    }
+
+    /// Re-saves each record an earlier version wrote with the event's text, so the
+    /// text leaves iCloud without waiting for the entry to change. Nothing else
+    /// changes, `updatedAt` included. Cheap once done: the fetch finds nothing.
+    private func scrubLegacyContent() throws {
+        let records = try context.fetch(FetchDescriptor<LedgerRecord>(predicate: #Predicate { $0.written != nil }))
+        guard !records.isEmpty else { return }
+        for record in records {
+            record.update(from: record.entry)
+        }
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
+    /// Saves, or discards the unsaved change if that fails. Fetches include unsaved
+    /// changes, so otherwise a failed save would still be seen by later passes.
+    private func saveOrRollBack() throws {
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+
+    /// Whether ledger work is running on the main thread. For tests (issue #26).
+    func isOnMainThread() -> Bool {
+        pthread_main_np() != 0
     }
 
     private func record(withID entryID: UUID) throws -> LedgerRecord? {

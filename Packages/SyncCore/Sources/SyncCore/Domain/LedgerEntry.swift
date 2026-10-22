@@ -28,12 +28,25 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
     /// The event's `calendarItemExternalIdentifier`.
     public var eventExternalIdentifier: String?
     public var calendarID: String?
-    /// What the app last wrote, used to detect user edits.
-    public var written: EventContent?
-    /// For adopted events: the event before the app updated it.
+    /// A digest of what the app last wrote, used to detect user edits. The ledger
+    /// syncs to iCloud, so it never keeps the text itself, which holds Health data.
+    public var writtenFingerprint: ContentFingerprint?
+    /// For adopted events: the event before the app updated it, i.e. the user's own
+    /// plan, with no workout section.
     public var preUpdate: EventContent?
     public var createdAt: Date
     public var updatedAt: Date
+    /// The cluster's activity type, so a replacement can be told apart from a
+    /// different workout. Nil for entries written before it was recorded.
+    public var activityType: WorkoutActivityType?
+    /// Set when the event was created with add-only access, so the app has never seen
+    /// it in the calendar and its identifier may be missing or out of date. The first
+    /// pass with full access finds the event and clears it.
+    public var needsLinking: Bool
+    /// Set when Health deleted or replaced the workout while the app had add-only
+    /// access, so its event couldn't be changed. The first pass with full access
+    /// applies the change, and clears it.
+    public var needsHealthFollowUp: Bool
 
     public init(
         id: UUID = UUID(),
@@ -44,10 +57,13 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
         state: State,
         eventExternalIdentifier: String? = nil,
         calendarID: String? = nil,
-        written: EventContent? = nil,
+        writtenFingerprint: ContentFingerprint? = nil,
         preUpdate: EventContent? = nil,
         createdAt: Date,
-        updatedAt: Date
+        updatedAt: Date,
+        activityType: WorkoutActivityType? = nil,
+        needsLinking: Bool = false,
+        needsHealthFollowUp: Bool = false
     ) {
         self.id = id
         self.workoutID = workoutID
@@ -57,10 +73,13 @@ public struct LedgerEntry: Identifiable, Hashable, Codable, Sendable {
         self.state = state
         self.eventExternalIdentifier = eventExternalIdentifier
         self.calendarID = calendarID
-        self.written = written
+        self.writtenFingerprint = writtenFingerprint
         self.preUpdate = preUpdate
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.activityType = activityType
+        self.needsLinking = needsLinking
+        self.needsHealthFollowUp = needsHealthFollowUp
     }
 
     /// Whether this entry is about the given workout, either as the cluster or as a member.
