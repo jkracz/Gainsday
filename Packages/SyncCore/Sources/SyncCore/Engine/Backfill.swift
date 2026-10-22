@@ -135,7 +135,7 @@ private actor DryRunLedger: Ledger {
     }
 
     func entriesNeedingLinking() async throws -> [LedgerEntry] {
-        overlaid(try await base.entriesNeedingLinking()).filter(\.needsLinking)
+        overlaid(try await base.entriesNeedingLinking()).filter { $0.needsLinking || $0.needsHealthFollowUp }
     }
 
     func save(_ entry: LedgerEntry) async throws {

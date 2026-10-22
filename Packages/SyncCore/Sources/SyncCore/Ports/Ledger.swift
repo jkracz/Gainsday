@@ -9,7 +9,8 @@ public protocol Ledger: Sendable {
     /// Entries whose workout overlaps `interval`.
     func entries(in interval: DateInterval) async throws -> [LedgerEntry]
 
-    /// Entries with `needsLinking` set.
+    /// Entries with `needsLinking` or `needsHealthFollowUp` set: work add-only access
+    /// left for the first pass with full access.
     func entriesNeedingLinking() async throws -> [LedgerEntry]
 
     /// Inserts the entry, or replaces the entry with the same `id`.

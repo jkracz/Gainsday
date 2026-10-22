@@ -28,7 +28,7 @@ public actor InMemoryLedger: Ledger {
     }
 
     public func entriesNeedingLinking() async throws -> [LedgerEntry] {
-        allEntries.filter(\.needsLinking)
+        allEntries.filter { $0.needsLinking || $0.needsHealthFollowUp }
     }
 
     /// Makes every later save throw `error`, as a full disk or store failure would,

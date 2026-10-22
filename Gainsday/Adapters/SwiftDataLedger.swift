@@ -112,7 +112,7 @@ actor SwiftDataLedger: Ledger {
     }
 
     func entriesNeedingLinking() async throws -> [LedgerEntry] {
-        let descriptor = FetchDescriptor<LedgerRecord>(predicate: #Predicate { $0.needsLinking })
+        let descriptor = FetchDescriptor<LedgerRecord>(predicate: #Predicate { $0.needsLinking || $0.needsHealthFollowUp })
         return try modelContext.fetch(descriptor).map(\.entry)
     }
 
