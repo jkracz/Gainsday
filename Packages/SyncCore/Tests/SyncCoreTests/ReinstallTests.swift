@@ -254,6 +254,60 @@ struct ReinstallTests {
         #expect(await harness.ledger.allEntries.map(\.state) == [.released])
     }
 
+    @Test("A matched plan released before a reinstall for an edited workout section stays released when the old entry arrives after it was recovered")
+    func lateReleasedEntryKeepsTheUsersSectionEdit() async throws {
+        let (harness, workout, _, _) = try await SyncHarness.adopting()
+        var edited = try #require(await harness.calendar.allEvents.first)
+        edited.content.notes = edited.content.notes?.replacingOccurrences(of: "Duration: 55 min", with: "Duration: 50 min")
+        await harness.calendar.put(edited)
+        var released = try #require(await harness.ledger.allEntries.first)
+        released.state = .released
+        released.createdAt = SyncHarness.now.addingTimeInterval(-7200)
+        released.updatedAt = SyncHarness.now.addingTimeInterval(-3600)
+        await harness.forgetLedger()
+        let recovered = try await harness.engine.run(.changes(since: nil))
+        #expect(await harness.ledger.allEntries.map(\.state) == [.adopted])
+        try await harness.ledger.save(released)
+
+        await harness.workouts.delete(workout.id)
+        await harness.workouts.add(SyncHarness.run(from: (10, 15), to: (11, 15)))
+        _ = try await harness.engine.run(.changes(since: recovered.nextAnchor))
+
+        #expect(await harness.calendar.allEvents == [edited])
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
+    }
+
+    @Test("An edit released before a reinstall still holds when the old entry, under the event's old identifier, arrives after the event was re-linked")
+    func lateReleasedEntryWithOldIdentifierKeepsTheUsersEdit() async throws {
+        let workout = SyncHarness.run(minutes: 30, minutesAgo: 10)
+        let harness = SyncHarness(workouts: [workout])
+        _ = try await harness.engine.run(.changes(since: nil))
+        var edited = try #require(await harness.calendar.allEvents.first)
+        edited.content.title = "Run with Sam"
+        edited.content.notes = "Easy pace\n" + (edited.content.notes ?? "")
+        await harness.calendar.put(edited)
+        var released = try #require(await harness.ledger.allEntries.first)
+        released.state = .released
+        released.createdAt = SyncHarness.now.addingTimeInterval(-7200)
+        released.updatedAt = SyncHarness.now.addingTimeInterval(-3600)
+        await harness.calendar.changeIdentifier(of: edited.id, to: "after-server-sync")
+        await harness.forgetLedger()
+        let recovered = try await harness.engine.run(.changes(since: nil))
+        #expect(recovered.actions == [.relink(workoutID: workout.id, eventID: "after-server-sync")])
+        try await harness.ledger.save(released)
+
+        let replacement = SyncHarness.run(minutes: 35, minutesAgo: 5)
+        await harness.workouts.delete(workout.id)
+        await harness.workouts.add(replacement)
+        _ = try await harness.engine.run(.changes(since: recovered.nextAnchor))
+
+        let event = try #require(await harness.calendar.allEvents.first)
+        #expect(await harness.calendar.allEvents.count == 1)
+        #expect(event.content.title == "Run with Sam")
+        #expect(event.content.notes == edited.content.notes)
+        #expect(await harness.ledger.allEntries.map(\.state) == [.released])
+    }
+
     @Test("An event deleted before a reinstall is deleted again when its tombstone arrives after the event was recreated")
     func lateTombstoneDeletesRecreatedEvent() async throws {
         let workout = SyncHarness.run()

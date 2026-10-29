@@ -22,13 +22,20 @@ extension SyncEngine {
     /// app wrote it. Otherwise it's the user's: the duplicate is kept, released, so the
     /// app leaves the event alone and never offers it as a plan.
     ///
-    /// An owned survivor created after a duplicate's release or tombstone was made
-    /// without knowing about it, e.g. by the first pass after a reinstall whose ledger
-    /// arrived late. The user's decision wins (see `carryOverDecision`).
+    /// An owned or adopted survivor created after a duplicate's release, or an owned one
+    /// created after a tombstone, was made without knowing about it, e.g. by the first
+    /// pass after a reinstall whose ledger arrived late. The user's decision wins (see
+    /// `carryOverDecision`). A release naming another event counts too when that event
+    /// has gone: a server sync can change an event's identifier, so it may well be the
+    /// survivor's event under its old one.
     func resolvedEntry(forWorkout workoutID: UUID) async throws -> LedgerEntry? {
         let entries = try await ledger.entries(forWorkout: workoutID)
         guard var survivor = LedgerEntry.survivor(of: entries) else { return nil }
-        var others = entries.filter { $0.id != survivor.id && !$0.isReleasedDuplicate(of: survivor) }
+        var others: [LedgerEntry] = []
+        for other in entries where other.id != survivor.id {
+            if other.isReleasedDuplicate(of: survivor), try await isSeparateEvent(of: other) { continue }
+            others.append(other)
+        }
         guard !others.isEmpty else { return survivor }
 
         var changed = false
@@ -83,14 +90,23 @@ extension SyncEngine {
     }
 
     /// Deletes a duplicate entry's event if it's an owned event the user hasn't changed,
-    /// or is already gone. False when the app can't read it or the user changed it.
+    /// or is already gone. False when the app can't read it, it isn't owned, or the user
+    /// changed it.
     private func removeDuplicateEvent(of entry: LedgerEntry) async throws -> Bool {
-        guard entry.state == .owned, await calendar.accessMode() == .full,
+        guard await calendar.accessMode() == .full,
               let eventID = entry.eventExternalIdentifier else { return false }
         guard let event = try await calendar.event(withID: eventID) else { return true }
-        guard event.content.matches(entry.writtenFingerprint) else { return false }
+        guard entry.state == .owned, event.content.matches(entry.writtenFingerprint) else { return false }
         try await calendar.delete(eventID: eventID)
         return true
+    }
+
+    /// Whether a released duplicate's event is the user's own copy, still in the
+    /// calendar, rather than the survivor's event under an identifier it has since
+    /// lost. Assumed so when the app can't read the calendar.
+    private func isSeparateEvent(of entry: LedgerEntry) async throws -> Bool {
+        guard await calendar.accessMode() == .full, let eventID = entry.eventExternalIdentifier else { return true }
+        return try await calendar.event(withID: eventID) != nil
     }
 }
 
@@ -102,12 +118,17 @@ private extension LedgerEntry {
         return eventID != survivorEventID
     }
 
-    /// The most recent release or tombstone among the duplicates that this owned entry
-    /// was created after, so it can't have known about it.
+    /// The most recent release or tombstone among the duplicates that this entry was
+    /// created after, so it can't have known about it. An adopted event is the user's
+    /// plan, so only a release carries over to it: the app never deletes a plan.
     func missedDecision(among others: [LedgerEntry]) -> LedgerEntry? {
-        guard state == .owned else { return nil }
+        let decisions: [LedgerEntry.State] = switch state {
+        case .owned: [.released, .tombstoned]
+        case .adopted: [.released]
+        case .released, .tombstoned: []
+        }
         return others
-            .filter { [.released, .tombstoned].contains($0.state) && createdAt > $0.updatedAt }
+            .filter { decisions.contains($0.state) && createdAt > $0.updatedAt }
             .max { ($0.updatedAt, $0.id.uuidString) < ($1.updatedAt, $1.id.uuidString) }
     }
 
