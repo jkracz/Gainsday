@@ -22,7 +22,7 @@ nonisolated final class LedgerRecord {
     /// What earlier versions kept instead of the fingerprint: the JSON-encoded
     /// `EventContent` the app wrote, which holds Health data. Kept so their records
     /// still decode, but never written: every save clears it, and the ledger scrubs
-    /// any left on first use (see `SwiftDataLedger.scrubLegacyContent`).
+    /// any left on first use and after each iCloud import (see `SwiftDataLedger.scrubLegacyContent`).
     var written: Data?
     /// JSON-encoded `EventContent`: the user's own plan, before the app adopted it.
     var preUpdate: Data?
@@ -93,10 +93,9 @@ actor SwiftDataLedger: Ledger {
     /// The context, once records earlier versions wrote have been scrubbed.
     private var modelContext: ModelContext {
         if !legacyContentScrubbed {
-            legacyContentScrubbed = true
-            // Best effort: a record left over is read correctly, and scrubbed when
-            // it's next saved or on the next launch.
-            try? scrubLegacyContent()
+            // Best effort: a record left over is read correctly, and scrubbed when it's
+            // next saved, on the next use, or after the next iCloud import.
+            legacyContentScrubbed = (try? scrubLegacyContent()) != nil
         }
         return context
     }
@@ -152,6 +151,12 @@ actor SwiftDataLedger: Ledger {
         guard let record = try record(withID: entryID) else { return }
         modelContext.delete(record)
         try saveOrRollBack()
+    }
+
+    /// Scrubs records an iCloud import brought in, see `scrubLegacyContent`. Best
+    /// effort: a record left over is read correctly, and tried again after the next import.
+    func importFinished() async {
+        try? scrubLegacyContent()
     }
 
     /// Re-saves each record an earlier version wrote with the event's text, so the
