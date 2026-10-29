@@ -26,6 +26,9 @@ extension SyncEngine {
         var actions: [SyncAction] = []
         var remaining = changes.added
         for deletedID in changes.deletedIDs {
+            // A cancelled pass, e.g. a background task out of time, stops between
+            // workouts, never partway through one.
+            try Task.checkCancellation()
             // Collapse iCloud duplicates and fix a changed identifier first, so an event
             // that's still there isn't mistaken for one the user deleted.
             guard let resolved = try await resolvedEntry(forWorkout: deletedID) else { continue }
@@ -43,7 +46,7 @@ extension SyncEngine {
                 if entry.workoutID == deletedID, let successor = try await successor(in: entry, among: survivors, settings: settings) {
                     entry.memberIDs.remove(deletedID)
                     entry.takeIdentity(from: successor)
-                    actions.append(try await rewrite(entry, for: successor, composer: composer))
+                    actions.append(finished(try await rewrite(entry, for: successor, composer: composer)))
                     continue
                 }
                 entry.remove(deletedID, keeping: survivors)
@@ -65,7 +68,7 @@ extension SyncEngine {
                 continue
             }
             if let action = try await follow(deletedID, in: entry, replacedBy: replacement, composer: composer) {
-                actions.append(action)
+                actions.append(finished(action))
             }
         }
         return (actions, remaining)
@@ -110,11 +113,13 @@ extension SyncEngine {
             entry.replace(deletedID, with: replacement)
             return try await rewrite(entry, for: replacement, composer: composer)
         }
-        if let blocked = try await blockedChange(to: entry, eventID: eventID, workoutID: deletedID) {
-            return blocked
+        let event: CalendarEvent
+        switch try await checkChange(to: entry, eventID: eventID, workoutID: deletedID) {
+        case .blocked(let action): return action
+        case .allowed(let checked): event = checked
         }
         if entry.state == .adopted {
-            return try await removeWorkoutSection(of: entry, eventID: eventID, workoutID: deletedID)
+            return try await removeWorkoutSection(of: entry, from: event, workoutID: deletedID)
         }
         try await calendar.delete(eventID: eventID)
         try await ledger.delete(entryID: entry.id)
@@ -144,12 +149,22 @@ extension SyncEngine {
         return .update(workoutID: workout.id, eventID: updated.id, updated.content)
     }
 
+    /// Checks an owned or adopted event before the app changes it, as `checkChange`
+    /// does. Nil when the event is still as the app wrote it.
+    func blockedChange(to entry: LedgerEntry, eventID: String, workoutID: UUID) async throws -> SyncAction? {
+        guard case .blocked(let action) = try await checkChange(to: entry, eventID: eventID, workoutID: workoutID) else {
+            return nil
+        }
+        return action
+    }
+
     /// Checks an owned or adopted event before the app changes it. When it can't be changed,
     /// saves the entry and returns what happened instead: add-only access keeps the
     /// event as it is, a deleted event tombstones the workout so it's never
-    /// recreated, and an edited one is released. Nil when the event is still as the
-    /// app wrote it.
-    func blockedChange(to entry: LedgerEntry, eventID: String, workoutID: UUID) async throws -> SyncAction? {
+    /// recreated, and an edited one is released. Otherwise returns the event as checked:
+    /// a change built from it never rests on a later copy nobody checked, e.g. one the
+    /// user has since invited guests to.
+    func checkChange(to entry: LedgerEntry, eventID: String, workoutID: UUID) async throws -> CheckedChange {
         var entry = entry
         entry.updatedAt = clock.now
         let event: CalendarEvent?
@@ -161,12 +176,12 @@ extension SyncEngine {
             entry.needsLinking = true
             entry.needsHealthFollowUp = true
             try await ledger.save(entry)
-            return .skip(workoutID: workoutID, .requiresFullAccess)
+            return .blocked(.skip(workoutID: workoutID, .requiresFullAccess))
         }
         guard let event else {
             entry.state = .tombstoned
             try await ledger.save(entry)
-            return .skip(workoutID: workoutID, .tombstoned)
+            return .blocked(.skip(workoutID: workoutID, .tombstoned))
         }
         // Changing a planned event with guests can email every one of them, and the
         // user may have invited someone since the match.
@@ -174,12 +189,12 @@ extension SyncEngine {
             : event.content.matches(entry.writtenFingerprint) else {
             entry.state = .released
             try await ledger.save(entry)
-            return .release(workoutID: workoutID, eventID: eventID)
+            return .blocked(.release(workoutID: workoutID, eventID: eventID))
         }
         // The ledger keeps only a fingerprint, so the activity log takes what the event
         // held from here, for Undo.
         Self.eventsBeforeChange?.record(event)
-        return nil
+        return .allowed(event)
     }
 
     /// The surviving cluster member whose values the event should show now, if any
@@ -201,6 +216,14 @@ extension SyncEngine {
         }
         return nil
     }
+}
+
+/// What `checkChange` found before the app changes an event.
+enum CheckedChange {
+    /// The event can't be changed, and this is what happened instead.
+    case blocked(SyncAction)
+    /// The event as checked, to build the change from.
+    case allowed(CalendarEvent)
 }
 
 private extension LedgerEntry {

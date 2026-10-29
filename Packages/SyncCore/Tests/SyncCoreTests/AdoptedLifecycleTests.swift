@@ -94,6 +94,81 @@ struct AdoptedLifecycleTests {
         #expect(entry.writtenFingerprint == event.content.fingerprint)
         #expect(entry.preUpdate == planned.content)
     }
+
+    @Test("Removing the workout section writes the event the app checked, never a later copy with a guest")
+    func sectionRemovalWritesCheckedEvent() async throws {
+        let (harness, workout, planned, anchor) = try await SyncHarness.adopting()
+        let calendar = GuestOnSecondReadCalendarStore(harness.calendar, eventID: planned.id)
+        var engine = harness.engine
+        engine.calendar = calendar
+
+        await harness.workouts.delete(workout.id)
+        let result = try await engine.run(.changes(since: anchor))
+
+        #expect(await calendar.updatesToEventsWithGuests == 0)
+        let event = try #require(await harness.calendar.allEvents.first)
+        #expect(result.actions == [.removeWorkoutSection(workoutID: workout.id, eventID: planned.id, event.content)])
+    }
+
+    @Test("Rewriting an adopted event for a replacement writes the event the app checked, never a later copy with a guest")
+    func rewriteWritesCheckedEvent() async throws {
+        let (harness, workout, planned, anchor) = try await SyncHarness.adopting()
+        let calendar = GuestOnSecondReadCalendarStore(harness.calendar, eventID: planned.id)
+        var engine = harness.engine
+        engine.calendar = calendar
+
+        await harness.workouts.delete(workout.id)
+        let replacement = SyncHarness.run(from: (10, 15), to: (11, 15))
+        await harness.workouts.add(replacement)
+        let result = try await engine.run(.changes(since: anchor))
+
+        #expect(await calendar.updatesToEventsWithGuests == 0)
+        let event = try #require(await harness.calendar.allEvents.first)
+        #expect(result.actions == [.update(workoutID: replacement.id, eventID: planned.id, event.content)])
+    }
+}
+
+/// A calendar where the user invites a guest to an event just as the app reads it by
+/// its identifier a second time, e.g. between checking the event and changing it.
+private actor GuestOnSecondReadCalendarStore: CalendarStore {
+    let base: InMemoryCalendarStore
+    let eventID: String
+    private var reads = 0
+    /// How many updates were made to the event while it had a guest.
+    private(set) var updatesToEventsWithGuests = 0
+
+    init(_ base: InMemoryCalendarStore, eventID: String) {
+        self.base = base
+        self.eventID = eventID
+    }
+
+    func accessMode() async -> AccessMode { await base.accessMode() }
+    func writableCalendars() async throws -> [CalendarInfo] { try await base.writableCalendars() }
+    func events(in interval: DateInterval, calendarIDs: Set<String>) async throws -> [CalendarEvent] {
+        try await base.events(in: interval, calendarIDs: calendarIDs)
+    }
+    func create(_ draft: EventDraft) async throws -> CalendarEvent { try await base.create(draft) }
+    func delete(eventID: String) async throws { try await base.delete(eventID: eventID) }
+    func refreshSources() async { await base.refreshSources() }
+    func defaultCalendarID() async -> String? { await base.defaultCalendarID() }
+
+    func event(withID id: String) async throws -> CalendarEvent? {
+        if id == eventID {
+            reads += 1
+            if reads == 2, var event = try await base.event(withID: id) {
+                event.attendeeCount = 1
+                await base.put(event)
+            }
+        }
+        return try await base.event(withID: id)
+    }
+
+    func update(eventID: String, to content: EventContent) async throws -> CalendarEvent {
+        if let event = try await base.event(withID: eventID), event.attendeeCount > 0 {
+            updatesToEventsWithGuests += 1
+        }
+        return try await base.update(eventID: eventID, to: content)
+    }
 }
 
 @Suite("Undoing an update to a planned event")

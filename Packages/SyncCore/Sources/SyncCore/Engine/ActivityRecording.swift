@@ -41,9 +41,25 @@ struct ActivityRecorder {
         self.before = before
     }
 
+    /// The actions the pass has finished so far, for when it's cancelled.
+    let completed = CompletedActions()
+
     /// Runs the pass, keeping each event as it was before the pass changed it.
-    nonisolated(nonsending) func capturingChanges<T>(_ pass: nonisolated(nonsending) () async throws -> T) async rethrows -> T {
-        try await SyncEngine.$eventsBeforeChange.withValue(changed, operation: pass)
+    ///
+    /// A cancelled pass stops between workouts (see `SyncEngine.finished`), so what it
+    /// finished is logged, with its Undo, before the cancellation goes on. A retry
+    /// skips those workouts as already synced, which the log leaves out.
+    nonisolated(nonsending) func capturingChanges(
+        _ pass: nonisolated(nonsending) () async throws -> [SyncAction]
+    ) async throws -> [SyncAction] {
+        do {
+            return try await SyncEngine.$eventsBeforeChange.withValue(changed) {
+                try await SyncEngine.$completedActions.withValue(completed, operation: pass)
+            }
+        } catch let error as CancellationError {
+            _ = await record(SyncResult(actions: completed.actions))
+            throw error
+        }
     }
 
     /// Adds the result's actions to the top of the log, keeping it to its capacity
@@ -164,9 +180,43 @@ final class EventsBeforeChange: Sendable {
     }
 }
 
+/// The changes a pass has finished, in order, each with its calendar and ledger
+/// writes complete. Skips and holds are left out: they have no Undo, and a retry
+/// repeats them, so logging them twice would show a held workout twice.
+final class CompletedActions: Sendable {
+    private let list = Mutex<[SyncAction]>([])
+
+    func append(contentsOf actions: [SyncAction]) {
+        let changes = actions.filter { action in
+            switch action {
+            case .skip, .holdForReview: false
+            default: true
+            }
+        }
+        list.withLock { $0 += changes }
+    }
+
+    var actions: [SyncAction] {
+        list.withLock { $0 }
+    }
+}
+
 extension SyncEngine {
     /// Where the running pass keeps the events it changes, for the activity log.
     @TaskLocal static var eventsBeforeChange: EventsBeforeChange?
+    /// Where the running pass keeps the actions it has finished, for the activity log.
+    @TaskLocal static var completedActions: CompletedActions?
+
+    /// Notes actions whose writes are complete, so a cancelled pass still logs them,
+    /// and returns them.
+    func finished(_ actions: [SyncAction]) -> [SyncAction] {
+        Self.completedActions?.append(contentsOf: actions)
+        return actions
+    }
+
+    func finished(_ action: SyncAction) -> SyncAction {
+        finished([action])[0]
+    }
 }
 
 extension ActivityLogEntry {

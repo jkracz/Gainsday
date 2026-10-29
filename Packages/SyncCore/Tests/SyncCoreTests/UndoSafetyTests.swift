@@ -248,4 +248,40 @@ struct HeldEntryRetentionTests {
         #expect(log.last?.id == held.id)
         #expect(log.last?.isAwaitingReview == true)
     }
+
+    @Test("Undo of adding an old held workout separately holds it for review again, though 50 newer entries came after it")
+    func undoAddingOldHeldWorkout() async throws {
+        let (harness, held, _) = try await Self.oldHeldWorkout()
+
+        let added = try await harness.engine.addSeparateEvent(entryID: held.id)
+        try await harness.engine.undo(entryID: added.id)
+
+        #expect(await harness.ledger.allEntries.allSatisfy { !$0.covers(held.workoutID) })
+        #expect(await harness.activityLog.entries.first { $0.id == held.id }?.isAwaitingReview == true)
+    }
+
+    @Test("Undo of matching an old held workout holds it for review again, though 50 newer entries came after it")
+    func undoMatchingOldHeldWorkout() async throws {
+        let (harness, held, gym) = try await Self.oldHeldWorkout()
+
+        let matched = try await harness.engine.match(entryID: held.id, toEventID: gym.id)
+        try await harness.engine.undo(entryID: matched.id)
+
+        #expect(await harness.calendar.allEvents.first { $0.id == gym.id }?.content == gym.content)
+        #expect(await harness.ledger.allEntries.allSatisfy { !$0.covers(held.workoutID) })
+        #expect(await harness.activityLog.entries.first { $0.id == held.id }?.isAwaitingReview == true)
+    }
+
+    /// A workout held for review, with more than the log's capacity of entries after it.
+    static func oldHeldWorkout() async throws -> (SyncHarness, held: ActivityLogEntry, plan: CalendarEvent) {
+        let workout = SyncHarness.run(from: (12, 5), to: (13, 0), type: .traditionalStrengthTraining)
+        let (harness, held, gym) = try await SyncHarness.withHeldWorkout(workout)
+        var anchor: WorkoutAnchor? = try await harness.workouts.changes(since: nil).anchor
+        for index in 0..<55 {
+            await harness.workouts.add(SyncHarness.run(minutes: 20, minutesAgo: Double(index + 3) * 60))
+            anchor = try await harness.engine.run(.changes(since: anchor)).nextAnchor
+        }
+        #expect(await harness.activityLog.entries.last?.id == held.id)
+        return (harness, held, gym)
+    }
 }

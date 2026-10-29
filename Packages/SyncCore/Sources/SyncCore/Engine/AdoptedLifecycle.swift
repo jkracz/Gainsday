@@ -6,12 +6,11 @@ import Foundation
 extension SyncEngine {
     /// Takes the workout section out of an adopted event whose workout was deleted in
     /// Health. The event keeps its time and everything the user wrote, and the app lets
-    /// go of it.
-    func removeWorkoutSection(of entry: LedgerEntry, eventID: String, workoutID: UUID) async throws -> SyncAction? {
-        guard let event = try await calendar.event(withID: eventID) else { return nil }
+    /// go of it. `event` is the event as `checkChange` checked it.
+    func removeWorkoutSection(of entry: LedgerEntry, from event: CalendarEvent, workoutID: UUID) async throws -> SyncAction {
         var content = event.content
         content.notes = WorkoutSection.removing(from: content.notes, workoutID: entry.workoutID)
-        let updated = try await calendar.update(eventID: eventID, to: content)
+        let updated = try await calendar.update(eventID: event.id, to: content)
         try await ledger.delete(entryID: entry.id)
         return .removeWorkoutSection(workoutID: workoutID, eventID: updated.id, updated.content)
     }
@@ -25,11 +24,10 @@ extension SyncEngine {
             try await ledger.save(entry)
             return .skip(workoutID: workout.id, .alreadySynced)
         }
-        if let blocked = try await blockedChange(to: entry, eventID: eventID, workoutID: workout.id) {
-            return blocked
-        }
-        guard let event = try await calendar.event(withID: eventID) else {
-            throw CalendarStoreError.eventNotFound(id: eventID)
+        let event: CalendarEvent
+        switch try await checkChange(to: entry, eventID: eventID, workoutID: workout.id) {
+        case .blocked(let action): return action
+        case .allowed(let checked): event = checked
         }
         var content = event.content
         content.start = workout.start
