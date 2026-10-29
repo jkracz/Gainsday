@@ -56,7 +56,7 @@ extension SyncEngine {
             // A cancelled pass, e.g. a background task out of time, stops between
             // workouts, never between an event and its ledger entry.
             try Task.checkCancellation()
-            actions.append(try await sync(cluster, to: calendarID, settings: settings, composer: composer, search: search))
+            actions.append(finished(try await sync(cluster, to: calendarID, settings: settings, composer: composer, search: search)))
         }
         return actions
     }

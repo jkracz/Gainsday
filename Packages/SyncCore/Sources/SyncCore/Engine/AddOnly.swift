@@ -54,6 +54,8 @@ extension SyncEngine {
         guard await calendar.accessMode() == .full else { return [] }
         var actions: [SyncAction] = []
         for pending in try await ledger.entriesNeedingLinking() {
+            // A cancelled pass stops between workouts, never partway through one.
+            try Task.checkCancellation()
             guard var entry = try await resolvedEntry(forWorkout: pending.workoutID),
                   entry.needsLinking || entry.needsHealthFollowUp else { continue }
             if entry.needsLinking {
@@ -62,18 +64,22 @@ extension SyncEngine {
                     // It went to the default calendar, which the destination now names.
                     entry.calendarID = settings.destinationCalendar?.id
                 }
+                var relink: SyncAction?
                 if entry.state == .owned, let calendarID = entry.calendarID,
                    entry.writtenFingerprint != nil,
                    let event = try await findOwnEvent(for: entry.memberIDs.union([entry.workoutID]), matching: ExpectedEvent(entry), in: calendarID, knownID: entry.eventExternalIdentifier),
                    event.id != entry.eventExternalIdentifier {
                     entry.eventExternalIdentifier = event.id
-                    actions.append(.relink(workoutID: entry.workoutID, eventID: event.id))
+                    relink = .relink(workoutID: entry.workoutID, eventID: event.id)
                 }
                 entry.updatedAt = clock.now
                 try await ledger.save(entry)
+                if let relink {
+                    actions.append(finished(relink))
+                }
             }
             if entry.needsHealthFollowUp, let action = try await followUpHealthChange(to: entry, settings: settings, composer: composer) {
-                actions.append(action)
+                actions.append(finished(action))
             }
         }
         return actions

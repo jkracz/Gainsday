@@ -26,6 +26,9 @@ extension SyncEngine {
         var actions: [SyncAction] = []
         var remaining = changes.added
         for deletedID in changes.deletedIDs {
+            // A cancelled pass, e.g. a background task out of time, stops between
+            // workouts, never partway through one.
+            try Task.checkCancellation()
             // Collapse iCloud duplicates and fix a changed identifier first, so an event
             // that's still there isn't mistaken for one the user deleted.
             guard let resolved = try await resolvedEntry(forWorkout: deletedID) else { continue }
@@ -43,7 +46,7 @@ extension SyncEngine {
                 if entry.workoutID == deletedID, let successor = try await successor(in: entry, among: survivors, settings: settings) {
                     entry.memberIDs.remove(deletedID)
                     entry.takeIdentity(from: successor)
-                    actions.append(try await rewrite(entry, for: successor, composer: composer))
+                    actions.append(finished(try await rewrite(entry, for: successor, composer: composer)))
                     continue
                 }
                 entry.remove(deletedID, keeping: survivors)
@@ -65,7 +68,7 @@ extension SyncEngine {
                 continue
             }
             if let action = try await follow(deletedID, in: entry, replacedBy: replacement, composer: composer) {
-                actions.append(action)
+                actions.append(finished(action))
             }
         }
         return (actions, remaining)
