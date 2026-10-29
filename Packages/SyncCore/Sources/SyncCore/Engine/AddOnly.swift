@@ -99,11 +99,13 @@ extension SyncEngine {
             entry.takeIdentity(from: workout)
             return try await rewrite(entry, for: workout, composer: composer)
         }
-        if let blocked = try await blockedChange(to: entry, eventID: eventID, workoutID: entry.workoutID) {
-            return blocked
+        let event: CalendarEvent
+        switch try await checkChange(to: entry, eventID: eventID, workoutID: entry.workoutID) {
+        case .blocked(let action): return action
+        case .allowed(let checked): event = checked
         }
         if entry.state == .adopted {
-            return try await removeWorkoutSection(of: entry, eventID: eventID, workoutID: entry.workoutID)
+            return try await removeWorkoutSection(of: entry, from: event, workoutID: entry.workoutID)
         }
         try await calendar.delete(eventID: eventID)
         try await ledger.delete(entryID: entry.id)
