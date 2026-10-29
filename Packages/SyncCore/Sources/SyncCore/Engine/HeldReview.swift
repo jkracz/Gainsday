@@ -14,8 +14,17 @@ extension ActivityLogEntry {
 extension [ActivityLogEntry] {
     /// The newest entries, up to the log's capacity, plus any older workouts still held
     /// for review: a held workout exists only as its log entry, so it's never dropped.
+    /// A held entry the user settled stays while a kept entry can still undo that and
+    /// hold it for review again.
     func trimmedToCapacity() -> [ActivityLogEntry] {
-        enumerated().filter { $0.offset < ActivityLogEntry.capacity || $0.element.isAwaitingReview }.map(\.element)
+        let kept = enumerated().filter { $0.offset < ActivityLogEntry.capacity || $0.element.isAwaitingReview }.map(\.element)
+        let reopenable = Set(kept.compactMap { entry -> UUID? in
+            guard entry.canUndo, case .returnToReview(let heldEntryID) = entry.undo else { return nil }
+            return heldEntryID
+        })
+        return enumerated().filter {
+            $0.offset < ActivityLogEntry.capacity || $0.element.isAwaitingReview || reopenable.contains($0.element.id)
+        }.map(\.element)
     }
 }
 
