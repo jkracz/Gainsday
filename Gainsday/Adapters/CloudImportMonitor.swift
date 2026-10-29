@@ -26,20 +26,22 @@ final class CloudImportMonitor {
     private static let waitedKey = "hasWaitedForLedgerImport"
 
     private let defaults: UserDefaults
-    private let hasICloudAccount: () async -> Bool
+    private let accountStatus: () async throws -> CKAccountStatus
     private var observation: Task<Void, Never>?
+    /// Runs after each import finishes, such as to scrub the records it brought in.
+    var afterEachImport: (() async -> Void)?
 
     init(
         defaults: UserDefaults = .standard,
         center: NotificationCenter = .default,
-        hasICloudAccount: @escaping () async -> Bool = { await CloudImportMonitor.hasCloudKitAccount() }
+        accountStatus: @escaping () async throws -> CKAccountStatus = { try await CloudImportMonitor.cloudKitAccountStatus() }
     ) {
         self.defaults = defaults
-        self.hasICloudAccount = hasICloudAccount
+        self.accountStatus = accountStatus
         let imports = Self.finishedImports(on: center)
         observation = Task { [weak self] in
             for await _ in imports {
-                self?.markImportFinished()
+                await self?.importFinished()
             }
         }
     }
@@ -48,12 +50,13 @@ final class CloudImportMonitor {
         observation?.cancel()
     }
 
-    /// Ready once an import has finished on this install, or straight away with no
-    /// iCloud account, since then there's nothing to import.
+    /// Ready once an import has finished on this install, or straight away when iCloud
+    /// confirms there's no account, since then there's nothing to import. Any other
+    /// status, or a failed check, may hide an account whose ledger is on the way.
     var isReady: Bool {
         get async {
             if hasImported { return true }
-            return await !hasICloudAccount()
+            return (try? await accountStatus()) == .noAccount
         }
     }
 
@@ -63,12 +66,18 @@ final class CloudImportMonitor {
 
     /// Whether the ledger syncs through iCloud. CloudKit, not iCloud Drive: the app has
     /// no iCloud Drive entitlement, so `ubiquityIdentityToken` says nothing about it.
-    nonisolated static func hasCloudKitAccount() async -> Bool {
-        (try? await CKContainer.default().accountStatus()) == .available
+    nonisolated static func cloudKitAccountStatus() async throws -> CKAccountStatus {
+        try await CKContainer.default().accountStatus()
     }
 
     func markImportFinished() {
         defaults.set(true, forKey: Self.importedKey)
+    }
+
+    /// Records a finished import, then runs `afterEachImport`.
+    func importFinished() async {
+        markImportFinished()
+        await afterEachImport?()
     }
 
     /// Waits until the monitor is ready, on the first pass after installing only.

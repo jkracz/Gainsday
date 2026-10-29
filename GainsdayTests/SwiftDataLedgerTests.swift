@@ -1,3 +1,4 @@
+import CloudKit
 import Foundation
 import SwiftData
 import SyncCore
@@ -65,18 +66,25 @@ struct SwiftDataLedgerTests {
         #expect(records.map(\.updatedAt) == [legacy.updatedAt])
     }
 
-    @Test("A legacy record iCloud brings in after first use is still read with its fingerprint, and scrubbed by the next launch")
-    func scrubsLateImportNextLaunch() async throws {
+    @Test("A legacy record iCloud brings in after first use is read with its fingerprint, and its text is scrubbed once the import finishes, without waiting for a relaunch")
+    @MainActor func scrubsLateImportWhenImportFinishes() async throws {
+        let monitor = CloudImportMonitor(
+            defaults: UserDefaults(suiteName: "SwiftDataLedgerTests-\(UUID().uuidString)")!,
+            center: NotificationCenter(),
+            accountStatus: { .available }
+        )
+        let ledger = ledger
+        monitor.afterEachImport = { await ledger.importFinished() }
         _ = try await ledger.entries(in: DateInterval(start: .distantPast, end: .distantFuture))
         let (legacy, content) = try Self.insertLegacyRecord(into: container)
 
         #expect(try await ledger.entry(withID: legacy.entryID)?.writtenFingerprint == content.fingerprint)
+        await monitor.importFinished()
 
-        let nextLaunch = SwiftDataLedger(modelContainer: container)
-        _ = try await nextLaunch.entries(in: DateInterval(start: .distantPast, end: .distantFuture))
         let records = try ModelContext(container).fetch(FetchDescriptor<LedgerRecord>())
         #expect(records.map(\.written) == [nil])
         #expect(records.map(\.writtenFingerprint) == [content.fingerprint.storageValue])
+        #expect(records.map(\.updatedAt) == [legacy.updatedAt])
     }
 
     /// A record as an earlier version wrote it: the event's content as JSON, and no fingerprint.

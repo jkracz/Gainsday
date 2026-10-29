@@ -15,7 +15,10 @@ import SwiftUI
             // Syncing without the ledger would create duplicates, so don't run at all.
             fatalError("Couldn't open the ledger: \(error)")
         }
-        let coordinator = SyncCoordinator(ledger: SwiftDataLedger(modelContainer: container), cloudImport: cloudImport)
+        let ledger = SwiftDataLedger(modelContainer: container)
+        // Records from earlier versions can arrive with any import, so scrub after each.
+        cloudImport.afterEachImport = { await ledger.importFinished() }
+        let coordinator = SyncCoordinator(ledger: ledger, cloudImport: cloudImport)
         coordinator.startBackgroundSync()
         _coordinator = State(initialValue: coordinator)
     }
