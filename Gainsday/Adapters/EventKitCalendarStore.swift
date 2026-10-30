@@ -12,6 +12,12 @@ actor EventKitCalendarStore: CalendarStore {
         try await store.requestFullAccessToEvents()
     }
 
+    /// Shows the add-only access prompt if the user hasn't answered it yet. With this
+    /// access the app can add events but can't see any, not even its own.
+    func requestAddOnlyAccess() async throws -> Bool {
+        try await store.requestWriteOnlyAccessToEvents()
+    }
+
     /// Fires when calendars or events change, in this app or elsewhere.
     nonisolated func changes() -> AsyncStream<Void> {
         NotificationCenter.default.signals(named: .EKEventStoreChanged)
@@ -47,8 +53,9 @@ actor EventKitCalendarStore: CalendarStore {
     }
 
     func create(_ draft: EventDraft) async throws -> CalendarEvent {
-        guard await accessMode() != .none else { throw CalendarStoreError.accessDenied }
-        guard let calendar = store.calendar(withIdentifier: draft.calendarID) else {
+        let mode = await accessMode()
+        guard mode != .none else { throw CalendarStoreError.accessDenied }
+        guard let calendar = calendar(withID: draft.calendarID) else {
             throw CalendarStoreError.calendarNotFound(id: draft.calendarID)
         }
         let event = EKEvent(eventStore: store)
@@ -58,7 +65,12 @@ actor EventKitCalendarStore: CalendarStore {
             event.availability = .free
         }
         try store.save(event, span: .thisEvent, commit: true)
-        return Self.calendarEvent(event)
+        var created = Self.calendarEvent(event)
+        if mode == .addOnly {
+            // The event's calendar is a stand-in that says nothing about where it went.
+            created.calendarID = draft.calendarID
+        }
+        return created
     }
 
     func update(eventID: String, to content: EventContent) async throws -> CalendarEvent {
@@ -79,6 +91,19 @@ actor EventKitCalendarStore: CalendarStore {
         store.refreshSourcesIfNecessary()
     }
 
+    func defaultCalendarID() async -> String? {
+        guard await accessMode() == .full else { return nil }
+        return store.defaultCalendarForNewEvents?.calendarIdentifier
+    }
+
+    /// With add-only access, `defaultCalendarForNewEvents` is a stand-in calendar that
+    /// saves to the user's default calendar. The calendar picked in `EKCalendarChooser`
+    /// is the same stand-in, and only sends events to the pick through the store that
+    /// showed the chooser, until the app quits. So add-only mode uses the default calendar.
+    private func calendar(withID id: String) -> EKCalendar? {
+        id == CalendarReference.defaultCalendarID ? store.defaultCalendarForNewEvents : store.calendar(withIdentifier: id)
+    }
+
     private func requireFullAccess() async throws {
         switch await accessMode() {
         case .full: return
@@ -94,14 +119,16 @@ actor EventKitCalendarStore: CalendarStore {
             ?? store.calendarItem(withIdentifier: id) as? EKEvent
     }
 
+    /// Times are written in whole seconds, as the fingerprint compares them, so a
+    /// store that rounds rather than truncates can't make an event look edited.
     private func apply(_ content: EventContent, to event: EKEvent) {
         event.title = content.title
-        event.startDate = content.start
-        event.endDate = content.end
+        event.startDate = content.start.truncatedToSecond
+        event.endDate = content.end.truncatedToSecond
         event.notes = content.notes
     }
 
-    private static func calendarInfo(_ calendar: EKCalendar) -> CalendarInfo {
+    static func calendarInfo(_ calendar: EKCalendar) -> CalendarInfo {
         CalendarInfo(
             id: calendar.calendarIdentifier,
             title: calendar.title,
@@ -119,7 +146,8 @@ actor EventKitCalendarStore: CalendarStore {
             isAllDay: event.isAllDay,
             attendeeCount: event.attendees?.count ?? 0,
             isDeclinedByUser: event.attendees?.contains { $0.isCurrentUser && $0.participantStatus == .declined } ?? false,
-            lastModified: event.lastModifiedDate
+            lastModified: event.lastModifiedDate,
+            isRecurring: event.hasRecurrenceRules
         )
     }
 
@@ -129,5 +157,12 @@ actor EventKitCalendarStore: CalendarStore {
         case .notSupported: .notSupported
         default: .busy
         }
+    }
+}
+
+nonisolated private extension Date {
+    /// The same instant without its fraction of a second, matching `ContentFingerprint`.
+    var truncatedToSecond: Date {
+        Date(timeIntervalSince1970: timeIntervalSince1970.rounded(.down))
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import Synchronization
 import SyncCore
 
 /// Reads workouts and their metrics from HealthKit. Read only: the app never writes to Health.
@@ -9,8 +10,12 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
         var errorDescription: String? { String(localized: "Health isn't available on this device.") }
     }
 
+    typealias WorkoutChangeHandler = @Sendable (_ finished: @escaping @Sendable () -> Void) -> Void
+
     let isHealthDataAvailable: Bool
     private let store: HKHealthStore
+    /// The running observer query and its handler, so it can be run again.
+    private let observer = Mutex<(query: HKObserverQuery, onChange: WorkoutChangeHandler)?>(nil)
 
     init(store: HKHealthStore = HKHealthStore(), isHealthDataAvailable: Bool = HKHealthStore.isHealthDataAvailable()) {
         self.store = store
@@ -34,13 +39,55 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
         try await store.requestAuthorization(toShare: [], read: Self.readTypes)
     }
 
+    /// Lets Health launch or wake the app as soon as a workout is saved. The setting
+    /// persists, so calling this again on later launches is harmless.
+    func enableBackgroundDelivery() async throws {
+        try requireHealthData()
+        try await store.enableBackgroundDelivery(for: .workoutType(), frequency: .immediate)
+    }
+
+    /// Calls `onChange` when workouts are added or deleted in Health, including when
+    /// Health launches the app in the background. Start this early in launch, or a
+    /// background launch isn't delivered. `onChange` must call `finished` once it has
+    /// synced, or Health wakes the app less often.
+    func observeWorkouts(onChange: @escaping WorkoutChangeHandler) {
+        guard isHealthDataAvailable else { return }
+        let query = Self.observerQuery(onChange)
+        observer.withLock { $0 = (query, onChange) }
+        store.execute(query)
+    }
+
+    /// Runs the observer query again. On a fresh install it starts before Health access
+    /// has been asked for, fails, and HealthKit never runs it again, so setup calls this
+    /// once it has asked.
+    func restartObservingWorkouts() {
+        let queries = observer.withLock { observer -> (old: HKObserverQuery, new: HKObserverQuery)? in
+            guard let running = observer else { return nil }
+            let restarted = Self.observerQuery(running.onChange)
+            observer = (restarted, running.onChange)
+            return (running.query, restarted)
+        }
+        guard let queries else { return }
+        store.stop(queries.old)
+        store.execute(queries.new)
+    }
+
+    private static func observerQuery(_ onChange: @escaping WorkoutChangeHandler) -> HKObserverQuery {
+        HKObserverQuery(sampleType: .workoutType(), predicate: nil) { _, completionHandler, error in
+            guard error == nil else { return completionHandler() }
+            // HealthKit lets the handler be called from any thread, but doesn't mark it Sendable.
+            nonisolated(unsafe) let completionHandler = completionHandler
+            onChange { completionHandler() }
+        }
+    }
+
     func changes(since anchor: WorkoutAnchor?) async throws -> WorkoutChanges {
         try requireHealthData()
         let descriptor = HKAnchoredObjectQueryDescriptor(
             predicates: [.workout()],
             anchor: anchor.flatMap(Self.queryAnchor)
         )
-        let result = try await descriptor.result(for: store)
+        let result = try await Self.mappingAccessErrors { try await descriptor.result(for: store) }
         return WorkoutChanges(
             added: result.addedSamples.map(Self.workout),
             deletedIDs: result.deletedObjects.map { $0.uuid },
@@ -54,7 +101,7 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
             predicates: [.workout(HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: .strictStartDate))],
             sortDescriptors: [SortDescriptor(\.startDate)]
         )
-        return try await descriptor.result(for: store).map(Self.workout)
+        return try await Self.mappingAccessErrors { try await descriptor.result(for: store) }.map(Self.workout)
     }
 
     func recentWorkouts(limit: Int) async throws -> [Workout] {
@@ -64,11 +111,25 @@ nonisolated final class HealthKitWorkoutSource: WorkoutSource {
             sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
             limit: limit
         )
-        return try await descriptor.result(for: store).map(Self.workout)
+        return try await Self.mappingAccessErrors { try await descriptor.result(for: store) }.map(Self.workout)
     }
 
     private func requireHealthData() throws {
         guard isHealthDataAvailable else { throw Unavailable() }
+    }
+
+    /// Reports HealthKit's authorization errors as `WorkoutSourceError.accessDenied`,
+    /// and its locked-phone error as `.locked`, for every Health read, so a pass that
+    /// finds the phone locked runs again on unlock. HealthKit usually hides denied read
+    /// access by returning no results instead.
+    static func mappingAccessErrors<T>(_ read: () async throws -> T) async throws -> T {
+        do {
+            return try await read()
+        } catch let error as HKError where [.errorAuthorizationDenied, .errorAuthorizationNotDetermined].contains(error.code) {
+            throw WorkoutSourceError.accessDenied
+        } catch let error as HKError where error.code == .errorDatabaseInaccessible {
+            throw WorkoutSourceError.locked
+        }
     }
 
     private static func workout(_ sample: HKWorkout) -> Workout {

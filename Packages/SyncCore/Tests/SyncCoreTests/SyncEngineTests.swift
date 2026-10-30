@@ -53,7 +53,7 @@ struct SyncEngineTests {
         #expect(entry.state == .owned)
         #expect(entry.eventExternalIdentifier == event.id)
         #expect(entry.calendarID == SyncHarness.destination.id)
-        #expect(entry.written == event.content)
+        #expect(entry.writtenFingerprint == event.content.fingerprint)
         #expect(entry.workoutStart == workout.start)
         #expect(entry.workoutEnd == workout.end)
         #expect(entry.createdAt == SyncHarness.now)
