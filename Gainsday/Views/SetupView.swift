@@ -1,8 +1,9 @@
 import SwiftUI
 import SyncCore
 
-/// One-time setup on each install: what Gainsday does, then Health access, a
-/// destination calendar and Start Syncing. The steps are listed in `SetupStep`.
+/// One-time setup on each install: what Gainsday does, then Health and calendar
+/// access with a destination calendar, then what syncs and Start Syncing. The steps are listed
+/// in `SetupStep`.
 struct SetupView: View {
     @Environment(SyncCoordinator.self) private var coordinator
     @State private var model = SetupModel()
@@ -31,10 +32,8 @@ struct SetupView: View {
     private func screen(for step: SetupStep) -> some View {
         switch step {
         case .welcome: WelcomeStep()
-        case .health: HealthStep()
-        case .calendar: CalendarStep()
-        case .matching: MatchingStep()
-        case .start: StartStep()
+        case .connect: ConnectStep()
+        case .ready: ReadyStep()
         }
     }
 }

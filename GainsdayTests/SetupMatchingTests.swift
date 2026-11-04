@@ -2,28 +2,8 @@ import SyncCore
 import Testing
 @testable import Gainsday
 
-@Suite("Setup's matching step")
+@Suite("Setup's planned-events choice")
 struct SetupMatchingTests {
-    @Test("After the calendar, setup asks about planned events, then moves on to Start")
-    func matchingFollowsCalendar() {
-        let model = SetupModel()
-
-        model.showStep(after: .calendar)
-        model.showStep(after: .matching)
-
-        #expect(model.path == [.matching, .start])
-    }
-
-    @Test("With add-only access, the planned-events step is skipped, since Gainsday can't read events")
-    func addOnlySkipsMatching() {
-        let model = SetupModel()
-        model.isAddOnly = true
-
-        model.showStep(after: .calendar)
-
-        #expect(model.path == [.start])
-    }
-
     @Test("A fresh install shows Not Now chosen")
     func freshInstallShowsNotNow() {
         #expect(SetupModel().showsMatchingOn(Settings()) == false)
@@ -54,7 +34,7 @@ struct SetupMatchingTests {
         #expect(settings.matchingEnabled)
     }
 
-    @Test("When the step was skipped, setup leaves the matching setting as it was")
+    @Test("When the user never answered, setup leaves the matching setting as it was")
     func skippedStepKeepsSetting() {
         var restored = Settings()
         restored.matchingEnabled = true

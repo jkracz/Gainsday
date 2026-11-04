@@ -1,8 +1,8 @@
 import SwiftUI
 import SyncCore
 
-/// Edits the title and notes templates, with placeholder chips, starters and a
-/// live preview rendered exactly as sync will write it.
+/// Edits the title and notes templates under a live preview rendered exactly as sync
+/// will write it, with starters and placeholder chips.
 struct TemplateEditorView: View {
     private enum Field {
         case title
@@ -25,10 +25,27 @@ struct TemplateEditorView: View {
 
     var body: some View {
         Form {
+            TemplatePreviewSection(template: template)
+
+            Section {
+                Picker("Start From", selection: starter) {
+                    ForEach(StarterTemplate.allCases, id: \.self) { starter in
+                        Text(starter.displayName).tag(Optional(starter))
+                    }
+                    if starter.wrappedValue == nil {
+                        Text("Custom").tag(StarterTemplate?.none)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+
             Section("Title") {
                 TextField("Title", text: $title, selection: $titleSelection)
                     .focused($focusedField, equals: .title)
             }
+            .listRowBackground(Color(.card))
 
             Section("Notes") {
                 TextEditor(text: $notes, selection: $notesSelection)
@@ -36,27 +53,24 @@ struct TemplateEditorView: View {
                     .frame(minHeight: 130)
                     .font(.body.monospaced())
             }
+            .listRowBackground(Color(.card))
 
             Section {
                 PlaceholderChips(insert: insert)
                     .listRowInsets(EdgeInsets())
             } header: {
-                Text("Placeholders")
+                Text("Tap to Insert")
             } footer: {
-                Text("Tap a placeholder to add it at the cursor. Notes lines and title parts with a missing value are left out.")
+                Text("Lines and title parts with a missing value are left out.")
             }
-
-            TemplatePreviewSection(template: template)
+            .listRowBackground(Color(.card))
 
             Section {
-                ForEach(StarterTemplate.allCases, id: \.self) { starter in
-                    Button(starter.displayName) { apply(starter.template) }
-                }
                 Button("Reset to Default", role: .destructive) { apply(.default) }
-            } header: {
-                Text("Start From")
             }
+            .listRowBackground(Color(.card))
         }
+        .canvasBackground()
         .navigationTitle("Event Template")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: load)
@@ -86,6 +100,15 @@ struct TemplateEditorView: View {
         let template = template
         guard hasLoaded, template != coordinator.settings.template else { return }
         coordinator.updateSettings { $0.template = template }
+    }
+
+    /// The starter the fields match, or nil once the user has made the template their own.
+    private var starter: Binding<StarterTemplate?> {
+        Binding {
+            StarterTemplate.allCases.first { $0.template == template }
+        } set: { starter in
+            if let starter { apply(starter.template) }
+        }
     }
 
     private func apply(_ template: EventTemplate) {
@@ -140,18 +163,11 @@ private struct PlaceholderChips: View {
 }
 
 extension StarterTemplate {
-    var displayName: LocalizedStringKey {
+    var displayName: LocalizedStringResource {
         switch self {
         case .minimal: "Minimal"
         case .detailed: "Detailed"
         case .runner: "Runner"
         }
-    }
-}
-
-/// A row that opens the template editor, shared by the status and settings screens.
-struct TemplateEditorLink: View {
-    var body: some View {
-        NavigationLink("Event Template") { TemplateEditorView() }
     }
 }

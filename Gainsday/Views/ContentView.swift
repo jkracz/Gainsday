@@ -7,7 +7,7 @@ struct ContentView: View {
         if !coordinator.hasLoaded {
             ProgressView()
         } else if coordinator.isSetUp {
-            StatusView()
+            HomeView()
         } else {
             SetupView()
         }

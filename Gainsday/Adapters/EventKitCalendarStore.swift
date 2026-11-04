@@ -1,6 +1,7 @@
 import EventKit
 import Foundation
 import SyncCore
+import UIKit
 
 /// Reads and writes calendar events with EventKit. Events are identified by their
 /// `calendarItemExternalIdentifier`.
@@ -37,6 +38,17 @@ actor EventKitCalendarStore: CalendarStore {
             .filter(\.allowsContentModifications)
             .map(Self.calendarInfo)
             .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    /// Each writable calendar's colour, by identifier, for showing beside its name.
+    func calendarColors() -> [String: CalendarColor] {
+        var colors: [String: CalendarColor] = [:]
+        for calendar in store.calendars(for: .event) {
+            var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0
+            guard UIColor(cgColor: calendar.cgColor).getRed(&red, green: &green, blue: &blue, alpha: nil) else { continue }
+            colors[calendar.calendarIdentifier] = CalendarColor(red: red, green: green, blue: blue)
+        }
+        return colors
     }
 
     func events(in interval: DateInterval, calendarIDs: Set<String>) async throws -> [CalendarEvent] {
@@ -165,4 +177,11 @@ nonisolated private extension Date {
     var truncatedToSecond: Date {
         Date(timeIntervalSince1970: timeIntervalSince1970.rounded(.down))
     }
+}
+
+/// A calendar's colour, as sRGB components from 0 to 1.
+nonisolated struct CalendarColor: Hashable, Sendable {
+    var red: Double
+    var green: Double
+    var blue: Double
 }

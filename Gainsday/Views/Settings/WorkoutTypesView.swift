@@ -18,13 +18,8 @@ struct WorkoutTypesView: View {
         .navigationTitle("Workout Types")
     }
 
-    /// The known types sorted by name, then Other, then any enabled type this version doesn't name.
     private var types: [WorkoutActivityType] {
-        let named = WorkoutActivityType.known.filter { $0 != .other }.sorted {
-            $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
-        }
-        let unnamed = coordinator.settings.enabledTypes.subtracting(WorkoutActivityType.known)
-        return named + [.other] + unnamed.sorted { $0.rawValue < $1.rawValue }
+        WorkoutActivityType.listed(enabled: coordinator.settings.enabledTypes)
     }
 
     private func isEnabled(_ type: WorkoutActivityType) -> Binding<Bool> {
@@ -42,20 +37,13 @@ struct WorkoutTypesView: View {
     }
 }
 
-/// A row that opens the workout type list and says how many are on.
-struct WorkoutTypesLink: View {
-    @Environment(SyncCoordinator.self) private var coordinator
-
-    var body: some View {
-        NavigationLink {
-            WorkoutTypesView()
-        } label: {
-            LabeledContent("Workout Types", value: summary)
+extension WorkoutActivityType {
+    /// The known types sorted by name, then Other, then any enabled type this version doesn't name.
+    static func listed(enabled: Set<WorkoutActivityType>) -> [WorkoutActivityType] {
+        let named = known.filter { $0 != .other }.sorted {
+            $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
         }
-    }
-
-    private var summary: String {
-        let count = coordinator.settings.enabledTypes.count
-        return count == 0 ? String(localized: "None") : String(localized: "\(count) on")
+        let unnamed = enabled.subtracting(known)
+        return named + [.other] + unnamed.sorted { $0.rawValue < $1.rawValue }
     }
 }
