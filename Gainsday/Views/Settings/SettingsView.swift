@@ -172,7 +172,7 @@ private struct AboutView: View {
             Section {
                 Label("Reads your workouts from Health, and never writes to it.", systemImage: "heart.fill")
                 Label("Adds one event per workout to the calendar you chose, and only changes events it added or you matched.", systemImage: "calendar")
-                Label("No server, no account and no analytics. Everything happens on this iPhone.", systemImage: "lock.fill")
+                Label("No server, no account and no analytics. Your workouts are read and written on this iPhone.", systemImage: "lock.fill")
                 Label("Your settings, and the list of events it added, are backed up to your own iCloud.", systemImage: "icloud.fill")
             }
             .listRowBackground(Color(.card))

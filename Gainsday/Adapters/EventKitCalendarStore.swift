@@ -44,7 +44,8 @@ actor EventKitCalendarStore: CalendarStore {
         var colors: [String: CalendarColor] = [:]
         for calendar in store.calendars(for: .event) {
             var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0
-            guard UIColor(cgColor: calendar.cgColor).getRed(&red, green: &green, blue: &blue, alpha: nil) else { continue }
+            guard let cgColor = calendar.cgColor,
+                  UIColor(cgColor: cgColor).getRed(&red, green: &green, blue: &blue, alpha: nil) else { continue }
             colors[calendar.calendarIdentifier] = CalendarColor(red: red, green: green, blue: blue)
         }
         return colors

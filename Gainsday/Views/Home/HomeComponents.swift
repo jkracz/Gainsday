@@ -159,7 +159,7 @@ struct WeekStrip: View {
                     VStack(spacing: 8) {
                         Text(day, format: .dateTime.weekday(.narrow))
                             .font(.caption.weight(isToday ? .bold : .medium))
-                            .foregroundStyle(isToday ? Color(.ink) : Color(.inkTertiary))
+                            .foregroundStyle(isToday ? Color(.ink) : Color(.inkSecondary))
                         Text(verbatim: count > 0 ? "\(count)" : "")
                             .font(.subheadline.bold().monospacedDigit())
                             .foregroundStyle(Color.onVolt)
