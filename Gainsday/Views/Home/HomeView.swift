@@ -1,12 +1,10 @@
 import SwiftUI
 import SyncCore
 
-/// The app's home: how syncing is going, the past week, anything waiting for the user,
-/// then every workout Gainsday handled, newest first. Tapping one opens its sheet.
+/// Sync status, weekly totals and the workout feed.
 struct HomeView: View {
     @Environment(SyncCoordinator.self) private var coordinator
     @Environment(\.scenePhase) private var scenePhase
-    /// Workouts from Health by ID, for the stats on each card. Missing ones show without stats.
     @State private var workouts: [UUID: Workout] = [:]
     @State private var calendarColors: [String: CalendarColor] = [:]
     @State private var selected: FeedItem?
@@ -29,7 +27,7 @@ struct HomeView: View {
                     HomeBanners()
                     WeekStrip(items: shown, workouts: workouts)
                     ForEach(shown.filter { $0.status == .needsReview }) { item in
-                        ReviewCard(item: item, workout: workouts[item.id]) { matching = item.current }
+                        ReviewCard(item: item) { matching = item.current }
                     }
                     ForEach(days(of: shown), id: \.self) { day in
                         SectionLabel(dayTitle(day))
@@ -83,7 +81,7 @@ struct HomeView: View {
         }
         .tint(Color.accentColor)
         .sheet(item: $selected) { item in
-            WorkoutSheet(opened: item, workout: workouts[item.id], calendarColor: destinationColor) { entry in
+            WorkoutSheet(opened: item, workout: workouts[item.id]) { entry in
                 removal.start(entry, coordinator: coordinator)
             }
         }
@@ -139,21 +137,19 @@ struct HomeView: View {
     }
 
     private func loadWorkouts() async {
-        // Without Health access there are no stats, and cards show without them.
+        // Without Health access, cards show without stats.
         let recent = (try? await coordinator.health.recentWorkouts(limit: 100)) ?? []
         workouts = Dictionary(recent.map { ($0.id, $0) }) { first, _ in first }
     }
 }
 
-/// A removal the user can still take back. The event is only removed once the toast
-/// has been up for a few seconds, or straight away if the user leaves the app.
+/// Defers event removal until the undo period ends or the app leaves the foreground.
 @Observable
 final class PendingRemoval {
     private(set) var entry: ActivityLogEntry?
     /// Entries kept out of the feed: the pending one, and any still being removed.
     private(set) var hiddenIDs: Set<UUID> = []
     var failed = false
-    /// Undo refused because the user edited the event, which is theirs now.
     private(set) var refusedForEdit = false
     private var timer: Task<Void, Never>?
     static let delay: Duration = .seconds(4)
@@ -184,7 +180,7 @@ final class PendingRemoval {
             } catch {
                 refusedForEdit = error as? UndoError == .eventEditedByUser
                 failed = true
-                // The entry can't be undone any more.
+                // Undo can release a user-edited event before throwing.
                 await coordinator.refreshActivityLog()
             }
         }
@@ -197,7 +193,7 @@ final class PendingRemoval {
     }
 }
 
-/// "Removed “Morning Run”" with Undo, over the bottom of the feed.
+/// A removal confirmation with an undo action.
 private struct UndoToast: View {
     let title: String
     let undo: () -> Void

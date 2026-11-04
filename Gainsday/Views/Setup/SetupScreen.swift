@@ -1,8 +1,6 @@
 import SwiftUI
 
-/// The frame every setup step shares: progress dashes, a big title and a line under
-/// it, the step's own content, any error, and the button that moves on, pinned to
-/// the bottom.
+/// Shared setup content, progress and bottom action.
 struct SetupScreen<Content: View>: View {
     @Environment(SetupModel.self) private var model
     let step: SetupStep
@@ -56,7 +54,7 @@ struct SetupScreen<Content: View>: View {
     }
 }
 
-/// Short dashes at the top of setup, filled up to the current step.
+/// Setup progress dashes.
 private struct StepDashes: View {
     let current: Int
     let count: Int
@@ -74,7 +72,7 @@ private struct StepDashes: View {
     }
 }
 
-/// Lays out views left to right, wrapping onto new lines, like words in a paragraph.
+/// Wraps views into rows.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 

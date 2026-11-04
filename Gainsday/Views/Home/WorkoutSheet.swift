@@ -1,15 +1,12 @@
 import SwiftUI
 import SyncCore
 
-/// One workout: what Gainsday did with it, its event as it is in the calendar, and
-/// everything the user can do about it.
+/// A workout's calendar event, history and available actions.
 struct WorkoutSheet: View {
-    /// The workout as the feed showed it. The sheet follows the activity log from there,
-    /// so it stays current after a match or Undo.
+    /// Falls back to this snapshot if the workout leaves the activity log.
     let opened: FeedItem
     let workout: Workout?
-    let calendarColor: CalendarColor?
-    /// Removes the workout's event, behind an Undo toast on the feed.
+    /// Defers removal through the feed's undo toast.
     let remove: (ActivityLogEntry) -> Void
 
     @Environment(SyncCoordinator.self) private var coordinator
@@ -19,10 +16,8 @@ struct WorkoutSheet: View {
     @State private var matching: ActivityLogEntry?
     @State private var confirming: ActivityLogEntry?
     @State private var undoFailed = false
-    /// Undo refused because the user edited the event, which is theirs now.
     @State private var undoRefusedForEdit = false
     @State private var addFailed = false
-    /// Why a held workout wasn't added, when the engine said.
     @State private var notAddedReason: SkipReason?
 
     private var item: FeedItem {
@@ -136,7 +131,6 @@ struct WorkoutSheet: View {
         }
     }
 
-    /// "Today · 7:02 – 7:41 AM · Apple Watch".
     private var subtitle: Text {
         let day = Calendar.current.isDateInToday(item.date) ? Text("Today")
             : Calendar.current.isDateInYesterday(item.date) ? Text("Yesterday")
@@ -228,7 +222,7 @@ struct WorkoutSheet: View {
         }
     }
 
-    /// What the event shown depends on: the entry it's for, and whether it can be read.
+    /// Reloads the event when its entry or read access changes.
     private struct EventSource: Hashable {
         var entryID: UUID
         var hasFullAccess: Bool
@@ -263,13 +257,13 @@ struct WorkoutSheet: View {
         } catch {
             undoRefusedForEdit = error as? UndoError == .eventEditedByUser
             undoFailed = true
-            // The entry can't be undone any more.
+            // Undo can release a user-edited event before throwing.
             await coordinator.refreshActivityLog()
         }
     }
 }
 
-/// A row in the sheet's list of actions: a tinted icon, a title and a chevron.
+/// A workout action with a tinted icon.
 private struct ActionRow: View {
     let title: Text
     let systemImage: String

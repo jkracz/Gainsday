@@ -1,8 +1,7 @@
 import SwiftUI
 import SyncCore
 
-/// The last step: which workout types to add, whether to add the past week and to
-/// update planned events, then Start Syncing.
+/// Workout filters, backfill and matching choices before syncing starts.
 struct ReadyStep: View {
     @Environment(SyncCoordinator.self) private var coordinator
     @Environment(SetupModel.self) private var model
@@ -22,7 +21,14 @@ struct ReadyStep: View {
 
             VStack(spacing: 0) {
                 Toggle(isOn: $model.addsPastWeek) {
-                    ToggleText(title: "Add the past 7 days", detail: pastWeekDetail)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Add the past 7 days")
+                            .font(.headline)
+                            .foregroundStyle(Color(.ink))
+                        Text(pastWeekDetail)
+                            .font(.subheadline)
+                            .foregroundStyle(Color(.inkSecondary))
+                    }
                 }
                 .padding(.vertical, 12)
                 // Matching reads the user's events, which add-only access can't.
@@ -67,7 +73,6 @@ struct ReadyStep: View {
         }
     }
 
-    /// Turning it on the first time explains matching first, as Settings does.
     private var matching: Binding<Bool> {
         Binding {
             model.showsMatchingOn(coordinator.settings)
@@ -81,23 +86,7 @@ struct ReadyStep: View {
     }
 }
 
-private struct ToggleText: View {
-    let title: LocalizedStringKey
-    let detail: LocalizedStringKey
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(Color(.ink))
-            Text(detail)
-                .font(.subheadline)
-                .foregroundStyle(Color(.inkSecondary))
-        }
-    }
-}
-
-/// Every workout type as a chip to tap on or off, coloured when it's on.
+/// Toggleable workout-type chips.
 struct WorkoutTypeChips: View {
     @Environment(SyncCoordinator.self) private var coordinator
 

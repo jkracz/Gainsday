@@ -3,8 +3,6 @@ import SyncCore
 
 /// What matching does, shown before the user turns it on: an example planned event
 /// before and after a workout updates it, then what's kept and what's left alone.
-/// `matchingExplanationSheet` shows it from setup's "See how", and the first time
-/// matching is turned on anywhere.
 struct MatchingExplanation: View {
     @Environment(SyncCoordinator.self) private var coordinator
 
@@ -12,7 +10,7 @@ struct MatchingExplanation: View {
         let example = Example(settings: coordinator.settings)
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(Text("Before"))
-            ExampleEventCard(content: example.planned, isHighlighted: false)
+            ExampleEventCard(content: example.planned)
             SectionLabel(Text("After your workout"))
             ExampleEventCard(content: example.updated, isHighlighted: true)
             VStack(alignment: .leading, spacing: 12) {

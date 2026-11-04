@@ -38,7 +38,7 @@ struct WorkoutTypesView: View {
 }
 
 extension WorkoutActivityType {
-    /// The known types sorted by name, then Other, then any enabled type this version doesn't name.
+    /// Keeps enabled types unknown to this version after the named types and Other.
     static func listed(enabled: Set<WorkoutActivityType>) -> [WorkoutActivityType] {
         let named = known.filter { $0 != .other }.sorted {
             $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending

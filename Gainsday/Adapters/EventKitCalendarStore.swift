@@ -40,7 +40,6 @@ actor EventKitCalendarStore: CalendarStore {
             .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
-    /// Each writable calendar's colour, by identifier, for showing beside its name.
     func calendarColors() -> [String: CalendarColor] {
         var colors: [String: CalendarColor] = [:]
         for calendar in store.calendars(for: .event) {

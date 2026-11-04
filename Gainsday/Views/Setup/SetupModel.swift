@@ -9,15 +9,12 @@ final class SetupModel {
     var path: [SetupStep] = []
     var healthRequested = false
     var calendars: [CalendarInfo]?
-    /// Each calendar's colour, by identifier, for the dot beside it.
     var calendarColors: [String: CalendarColor] = [:]
     var selectedCalendarID: String?
     var calendarAccessDenied = false
     /// The user chose add-only access, so events go to their default calendar.
     var isAddOnly = false
-    /// Whether workouts update matching planned events. Nil until the user answers or
-    /// Start Syncing pins what they saw, and with add-only access, which leaves the
-    /// setting as it is.
+    /// Nil preserves the restored setting until the user chooses or starts syncing with full access.
     var enablesMatching: Bool?
     /// Whether Start Syncing also adds the past week's workouts.
     var addsPastWeek = true
@@ -109,8 +106,7 @@ final class SetupModel {
     func startSyncing(_ coordinator: SyncCoordinator) async {
         guard let selectedCalendar else { return }
         isStarting = true
-        // Keeps what the user saw, even if restored settings arrive later. Add-only
-        // access can't match, so it leaves the setting as it is.
+        // Pin the displayed choice before a late iCloud restore can change it.
         if !isAddOnly { enablesMatching = showsMatchingOn(coordinator.settings) }
         await coordinator.finishSetup(destination: selectedCalendar, choices: choices)
         if enablesMatching == true { MatchingExplanation.hasTurnedOnMatching = true }

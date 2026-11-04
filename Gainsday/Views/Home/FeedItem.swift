@@ -2,24 +2,19 @@ import Foundation
 import SwiftUI
 import SyncCore
 
-/// One workout in the home feed: where it stands, and everything Gainsday did with
-/// it, from the activity log.
+/// A workout's current status and activity history in the home feed.
 struct FeedItem: Identifiable, Hashable {
-    /// The entry that says where the workout stands, and whose actions the sheet offers:
-    /// the newest, unless it undid a review choice or a manual match, which reopens the
-    /// held workout or the create before it.
+    /// Undoing a review choice or manual match reopens the earlier active entry.
     let current: ActivityLogEntry
     /// Every entry for the workout, newest first.
     let history: [ActivityLogEntry]
 
     var id: UUID { current.workoutID }
 
-    /// When the workout started, or when the entry was logged if that isn't known.
     var date: Date { current.workoutStart ?? current.date }
 
     var status: FeedStatus { FeedStatus(current) }
 
-    /// The log grouped by workout, newest first.
     static func items(from log: [ActivityLogEntry]) -> [FeedItem] {
         var order: [UUID] = []
         var byWorkout: [UUID: [ActivityLogEntry]] = [:]
@@ -37,7 +32,6 @@ struct FeedItem: Identifiable, Hashable {
 }
 
 private extension ActivityLogEntry {
-    /// Whether undoing this entry handed the workout back to an earlier one.
     var reopensEarlierEntry: Bool {
         guard undoneAt != nil else { return false }
         switch undo {
@@ -47,7 +41,7 @@ private extension ActivityLogEntry {
     }
 }
 
-/// What a workout's card says happened to it.
+/// A workout's status in the feed.
 enum FeedStatus: Hashable {
     case added
     case matched
@@ -60,7 +54,7 @@ enum FeedStatus: Hashable {
 
     init(_ entry: ActivityLogEntry) {
         if entry.undoneAt != nil {
-            // Undoing an add removes the event, which is what the user will look for.
+            // Show the calendar outcome when undoing an add.
             if case .create = entry.action { self = .removed } else { self = .undone }
             return
         }
@@ -75,7 +69,6 @@ enum FeedStatus: Hashable {
         }
     }
 
-    /// Whether the workout is in the user's calendar, as a new event or a planned one.
     var isInCalendar: Bool {
         switch self {
         case .added, .matched, .updated, .yours: true

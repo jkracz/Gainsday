@@ -1,12 +1,7 @@
 import SwiftUI
 import SyncCore
 
-// The "Volt" look: warm neutral surfaces, ink text, a lime accent and one colour per
-// kind of workout. Every colour is an asset with a dark variant, so dark mode follows
-// the system without any checks in views.
-
 extension WorkoutActivityType {
-    /// The colour that marks this kind of workout in cards, chips and the week strip.
     var tint: Color {
         switch self {
         case .running, .hiking: Color(.workoutRun)
@@ -20,8 +15,7 @@ extension WorkoutActivityType {
     }
 }
 
-/// The full-width capsule button that moves a flow on. Ink with volt text in light
-/// mode, volt with dark text in dark mode.
+/// A full-width capsule button for primary actions.
 struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
@@ -35,7 +29,7 @@ struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
-/// A quieter capsule button, outlined, for the second choice next to a primary one.
+/// An outlined capsule button for secondary actions.
 struct SecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -58,7 +52,6 @@ extension ButtonStyle where Self == SecondaryButtonStyle {
 }
 
 extension View {
-    /// A rounded card on the canvas.
     func card(padding: CGFloat = 16) -> some View {
         self
             .padding(padding)
@@ -66,7 +59,6 @@ extension View {
             .background(Color(.card), in: .rect(cornerRadius: 20))
     }
 
-    /// The warm canvas behind a screen, also behind lists and forms.
     func canvasBackground() -> some View {
         self
             .scrollContentBackground(.hidden)
@@ -74,7 +66,7 @@ extension View {
     }
 }
 
-/// A small coloured pill: what happened to a workout, or a label like "Shared".
+/// A tinted status pill.
 struct Badge: View {
     let text: Text
     let color: Color
@@ -94,7 +86,7 @@ struct Badge: View {
     }
 }
 
-/// The small caps label above a group, like "TODAY".
+/// An uppercase section heading.
 struct SectionLabel: View {
     let text: Text
 
@@ -111,7 +103,7 @@ struct SectionLabel: View {
     }
 }
 
-/// A rounded square with a white glyph, as on the Settings rows.
+/// A white glyph on a coloured tile.
 struct IconTile: View {
     let systemImage: String
     let color: Color

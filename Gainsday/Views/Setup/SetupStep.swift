@@ -5,9 +5,7 @@
 nonisolated enum SetupStep: CaseIterable, Hashable {
     /// What Gainsday reads and writes, shown before any permission prompt.
     case welcome
-    /// Health and calendar access, and the calendar workouts go to.
     case connect
-    /// Workout types, the 7-day backfill and planned events, then Start Syncing.
     case ready
 
     /// The step after this one, or nil for the last.
@@ -17,6 +15,5 @@ nonisolated enum SetupStep: CaseIterable, Hashable {
         return steps[index + 1]
     }
 
-    /// Where the step sits in the progress dashes, from 0.
     var index: Int { Self.allCases.firstIndex(of: self) ?? 0 }
 }

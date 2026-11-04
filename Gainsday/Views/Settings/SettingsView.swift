@@ -1,9 +1,7 @@
 import SwiftUI
 import SyncCore
 
-/// Every setting on one screen, each row saying its current value. Explanations live
-/// on the screens the rows open. Every setting is backed up to iCloud, so a reinstall
-/// restores it.
+/// Settings summaries and links to their editors.
 struct SettingsView: View {
     @Environment(SyncCoordinator.self) private var coordinator
 
@@ -116,7 +114,7 @@ struct SettingsView: View {
     }
 }
 
-/// A settings row: a coloured tile, a title and whatever sits on the right.
+/// A settings label with an icon tile and trailing content.
 private struct SettingsRow<Trailing: View>: View {
     let title: LocalizedStringKey
     let systemImage: String
@@ -136,7 +134,7 @@ private struct SettingsRow<Trailing: View>: View {
     }
 }
 
-/// A settings row that opens another screen, with the setting's value beside the chevron.
+/// A settings summary that opens its editor.
 private struct SettingsLink<Destination: View>: View {
     let title: LocalizedStringKey
     let systemImage: String
@@ -167,7 +165,7 @@ private struct CalendarAccessView: View {
     }
 }
 
-/// What Gainsday reads, writes and keeps, and that nothing else leaves the phone.
+/// Privacy details, source code and app version.
 private struct AboutView: View {
     var body: some View {
         Form {

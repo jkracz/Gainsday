@@ -2,7 +2,7 @@ import SwiftUI
 import SyncCore
 import UIKit
 
-/// "Synced 2 min ago to ● Workouts", or that a sync is running or waiting for iCloud.
+/// Sync progress and the destination calendar.
 struct SyncStatusLine: View {
     @Environment(SyncCoordinator.self) private var coordinator
     let color: CalendarColor?
@@ -40,7 +40,7 @@ struct SyncStatusLine: View {
 }
 
 extension Color {
-    /// Text on a volt fill, which stays light in dark mode too.
+    /// Text on volt, which is light in both modes.
     nonisolated static let onVolt = Color(red: 0.055, green: 0.059, blue: 0.039)
 
     nonisolated init(_ calendarColor: CalendarColor) {
@@ -48,8 +48,7 @@ extension Color {
     }
 }
 
-/// Problems worth knowing about, each with the button that fixes it: the last error,
-/// Background App Refresh turned off, and add-only calendar access.
+/// Sync errors and permission warnings with recovery actions.
 struct HomeBanners: View {
     @Environment(SyncCoordinator.self) private var coordinator
     @Environment(\.openURL) private var openURL
@@ -126,7 +125,7 @@ private struct Banner: View {
     }
 }
 
-/// The past seven days, with how many workouts went to the calendar on each.
+/// Daily calendar workout counts for the past week.
 struct WeekStrip: View {
     let items: [FeedItem]
     let workouts: [UUID: Workout]
@@ -180,11 +179,10 @@ struct WeekStrip: View {
     }
 }
 
-/// A workout held for review, asking whether it was a planned one.
+/// A held workout's matching and separate-event choices.
 struct ReviewCard: View {
     @Environment(SyncCoordinator.self) private var coordinator
     let item: FeedItem
-    let workout: Workout?
     let match: () -> Void
     @State private var addFailed = false
     @State private var notAddedReason: SkipReason?
@@ -242,7 +240,7 @@ struct ReviewCard: View {
     }
 }
 
-/// The primary button's look, sized to sit beside another in a card.
+/// A primary capsule button sized for a card.
 struct CompactPrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
@@ -257,7 +255,7 @@ struct CompactPrimaryButtonStyle: ButtonStyle {
     }
 }
 
-/// A workout in the feed: its colour, title, times and stats, and what Gainsday did.
+/// A workout summary and status in the feed.
 struct FeedCard: View {
     let item: FeedItem
     let workout: Workout?
@@ -289,8 +287,7 @@ struct FeedCard: View {
     }
 }
 
-/// "7:02 – 7:41 AM · 6.2 km · 148 bpm", or just the start time when the workout's
-/// stats aren't available.
+/// A workout's times and available stats.
 struct WorkoutSummary: View {
     let date: Date
     let workout: Workout?
@@ -304,7 +301,7 @@ struct WorkoutSummary: View {
         }
     }
 
-    private func distance(_ workout: Workout) -> String? {
+    private func distance(_ workout: Workout) -> String {
         guard let meters = workout.metrics.distanceMeters, meters > 0 else {
             return Duration.seconds(workout.end.timeIntervalSince(workout.start)).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
         }
@@ -316,7 +313,7 @@ struct WorkoutSummary: View {
     }
 }
 
-/// "3 skipped", opening the list of workouts the filters left out.
+/// A skipped-workout count beside a navigation chevron.
 struct SkippedRow: View {
     let items: [FeedItem]
 

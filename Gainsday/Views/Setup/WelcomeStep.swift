@@ -37,7 +37,7 @@ struct WelcomeStep: View {
     }
 }
 
-/// One line of what Gainsday promises, with a tinted icon.
+/// A privacy promise with an icon.
 private struct Promise: View {
     let systemImage: String
     let text: LocalizedStringKey
@@ -67,7 +67,7 @@ private struct PromiseLabelStyle: LabelStyle {
     }
 }
 
-/// A day in a calendar with a few workout events on it, to show the idea at a glance.
+/// A sample calendar day containing workout events.
 private struct CalendarDayHero: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

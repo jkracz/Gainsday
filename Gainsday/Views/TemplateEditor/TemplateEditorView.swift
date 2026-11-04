@@ -1,8 +1,7 @@
 import SwiftUI
 import SyncCore
 
-/// Edits the title and notes templates under a live preview rendered exactly as sync
-/// will write it, with starters and placeholder chips.
+/// Edits event templates with starters, placeholders and a live sync preview.
 struct TemplateEditorView: View {
     private enum Field {
         case title
@@ -99,14 +98,13 @@ struct TemplateEditorView: View {
         coordinator.updateSettings { $0.template = template }
     }
 
-    /// A template the user can start from, or `custom` once they've made it their own.
+    /// A starter template or custom edits.
     private enum Starter: Hashable {
         case `default`
         case starter(StarterTemplate)
         case custom
     }
 
-    /// The starting point the fields match.
     private var starter: Binding<Starter> {
         Binding {
             if template == .default { return .default }

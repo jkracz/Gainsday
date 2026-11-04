@@ -1,9 +1,7 @@
 import SwiftUI
 import SyncCore
 
-/// One-time setup on each install: what Gainsday does, then Health and calendar
-/// access with a destination calendar, then what syncs and Start Syncing. The steps are listed
-/// in `SetupStep`.
+/// One-time setup for permissions, a destination calendar and sync choices.
 struct SetupView: View {
     @Environment(SyncCoordinator.self) private var coordinator
     @State private var model = SetupModel()

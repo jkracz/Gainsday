@@ -2,7 +2,7 @@ import SwiftUI
 import SyncCore
 import UIKit
 
-/// Health and calendar access on one screen, then the calendar workouts go to.
+/// Health and calendar permissions with a destination calendar picker.
 struct ConnectStep: View {
     @Environment(SyncCoordinator.self) private var coordinator
     @Environment(SetupModel.self) private var model
@@ -33,7 +33,7 @@ struct ConnectStep: View {
             }
         }
         .task {
-            // Back in setup after a reinstall or revoked access, full access may already be granted.
+            // Reinstalls can retain calendar permission.
             if model.calendars == nil, await coordinator.calendar.accessMode() == .full {
                 await model.refreshCalendars(coordinator)
             }
@@ -41,7 +41,7 @@ struct ConnectStep: View {
     }
 }
 
-/// A permission: an icon, what it's for, and Allow or a green check.
+/// A permission description with a trailing control.
 private struct PermissionRow<Trailing: View>: View {
     let title: LocalizedStringKey
     let detail: LocalizedStringKey
@@ -171,7 +171,7 @@ private struct CalendarCard: View {
     }
 }
 
-/// A calendar the user can pick: its colour, its name and a check on the chosen one.
+/// A selectable calendar row.
 private struct CalendarChoice: View {
     let title: String
     let color: CalendarColor?
