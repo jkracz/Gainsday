@@ -5,11 +5,10 @@ import UIKit
 /// Sync progress and the destination calendar.
 struct SyncStatusLine: View {
     @Environment(SyncCoordinator.self) private var coordinator
-    let color: CalendarColor?
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { _ in
-            HStack(spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 if coordinator.isSyncing {
                     ProgressView().controlSize(.mini)
                     Text("Syncing…")
@@ -17,9 +16,9 @@ struct SyncStatusLine: View {
                     Image(systemName: "icloud").accessibilityHidden(true)
                     Text(verbatim: waiting)
                 } else {
-                    Circle()
-                        .fill(coordinator.lastError == nil ? Color(.positive) : Color(.danger))
-                        .frame(width: 8, height: 8)
+                    Image(systemName: coordinator.lastError == nil ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                        .foregroundStyle(coordinator.lastError == nil ? Color(.positive) : Color(.danger))
+                        .accessibilityHidden(true)
                     if let pass = coordinator.lastPass {
                         Text("Synced \(pass.finishedAt.formatted(.relative(presentation: .named))) to \(calendarName)")
                     } else {
@@ -34,8 +33,7 @@ struct SyncStatusLine: View {
 
     private var calendarName: Text {
         let title = coordinator.settings.destinationCalendar?.displayTitle ?? ""
-        let dot = Text(Image(systemName: "circle.fill")).font(.system(size: 8)).foregroundStyle(color.map(Color.init) ?? Color(.inkTertiary))
-        return Text("\(dot) \(Text(verbatim: title).fontWeight(.semibold).foregroundStyle(Color(.ink)))")
+        return Text(verbatim: title).fontWeight(.semibold).foregroundStyle(Color(.ink))
     }
 }
 

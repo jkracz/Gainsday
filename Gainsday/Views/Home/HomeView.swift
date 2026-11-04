@@ -6,7 +6,6 @@ struct HomeView: View {
     @Environment(SyncCoordinator.self) private var coordinator
     @Environment(\.scenePhase) private var scenePhase
     @State private var workouts: [UUID: Workout] = [:]
-    @State private var calendarColors: [String: CalendarColor] = [:]
     @State private var selected: FeedItem?
     @State private var matching: ActivityLogEntry?
     @State private var isAddingPast = false
@@ -23,7 +22,7 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    SyncStatusLine(color: destinationColor)
+                    SyncStatusLine()
                     HomeBanners()
                     WeekStrip(items: shown, workouts: workouts)
                     ForEach(shown.filter { $0.status == .needsReview }) { item in
@@ -108,17 +107,10 @@ struct HomeView: View {
             }
         }
         .task(id: coordinator.activityLog) { await loadWorkouts() }
-        .task(id: coordinator.calendarAccess) {
-            calendarColors = await coordinator.calendar.calendarColors()
-        }
         .onChange(of: scenePhase) { _, phase in
             // Leaving the app shouldn't lose a removal the user meant.
             if phase != .active { removal.commitNow(coordinator: coordinator) }
         }
-    }
-
-    private var destinationColor: CalendarColor? {
-        coordinator.settings.destinationCalendar.flatMap { calendarColors[$0.id] }
     }
 
     private func days(of items: [FeedItem]) -> [Date] {
