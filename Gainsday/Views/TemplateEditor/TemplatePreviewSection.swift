@@ -24,6 +24,11 @@ struct TemplatePreviewSection: View {
             }
             if let workout = choice?.workout {
                 let rendered = TemplateRenderer(locale: clock.locale, calendar: clock.calendar).render(template, for: workout)
+                HStack(alignment: .top, spacing: 12) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(workout.activityType.tint)
+                    .frame(width: 4)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(verbatim: rendered.title)
                         .font(.headline)
@@ -42,15 +47,18 @@ struct TemplatePreviewSection: View {
                     }
                 }
                 .textSelection(.enabled)
+                }
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.vertical, 4)
             }
         } header: {
             Text("Preview")
         } footer: {
             if coordinator.settings.footerEnabled {
-                Text("Gainsday adds the last line itself, so it can recognise its events. It isn't part of your template.")
+                Text("Gainsday adds the last line so it can recognise its events.")
             }
         }
+        .listRowBackground(Color(.card))
         .task { await loadRecentWorkouts() }
     }
 

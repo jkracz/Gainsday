@@ -3,32 +3,22 @@ import SyncCore
 
 /// What matching does, shown before the user turns it on: an example planned event
 /// before and after a workout updates it, then what's kept and what's left alone.
-/// Setup shows it as a step, and `matchingExplanationSheet` shows it the first time
-/// matching is turned on anywhere else.
 struct MatchingExplanation: View {
     @Environment(SyncCoordinator.self) private var coordinator
 
     var body: some View {
         let example = Example(settings: coordinator.settings)
-        Section("Before") {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(Text("Before"))
             ExampleEventCard(content: example.planned)
-        }
-        Section("After Your Workout") {
-            ExampleEventCard(content: example.updated)
-        }
-        Section {
-            SetupPoint(
-                title: "Your title and notes stay",
-                systemImage: "text.badge.checkmark",
-                detail: "The event moves to when you actually worked out, and the workout's details are added below your notes. You can undo this in Activity."
-            )
-            SetupPoint(
-                title: "Only clear matches",
-                systemImage: "questionmark.circle",
-                detail: "If Gainsday isn't sure which event is the plan, or the event has guests, it leaves your events alone and adds its own."
-            )
-        } footer: {
-            Text("You can change this later in Settings.")
+            SectionLabel(Text("After your workout"))
+            ExampleEventCard(content: example.updated, isHighlighted: true)
+            VStack(alignment: .leading, spacing: 12) {
+                Check(text: "Your title and notes stay. The workout is added below them.")
+                Check(text: "The event moves to when you actually worked out.")
+                Check(text: "Only clear matches. Events with guests are never changed.")
+            }
+            .padding(.top, 8)
         }
     }
 
@@ -53,30 +43,57 @@ struct MatchingExplanation: View {
     }
 }
 
+private struct Check: View {
+    let text: LocalizedStringKey
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: "checkmark")
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(Color(.ink))
+        }
+    }
+}
+
 /// An event as it would look in Calendar: its title, times and notes.
-private struct ExampleEventCard: View {
+struct ExampleEventCard: View {
     let content: EventContent
+    var isHighlighted = false
+    var tint = WorkoutActivityType.running.tint
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             RoundedRectangle(cornerRadius: 2)
-                .fill(.tint)
+                .fill(tint)
                 .frame(width: 4)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: content.title)
                     .font(.headline)
-                Text(content.start..<content.end, format: .interval.hour().minute())
+                    .foregroundStyle(Color(.ink))
+                Text(content.start..<max(content.start, content.end), format: .interval.hour().minute())
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color(.inkSecondary))
                 if let notes = content.notes, !notes.isEmpty {
                     Text(verbatim: notes)
                         .font(.footnote)
+                        .foregroundStyle(Color(.ink))
                         .padding(.top, 4)
                 }
             }
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, 4)
+        .fixedSize(horizontal: false, vertical: true)
+        .card(padding: 14)
+        .overlay {
+            if isHighlighted {
+                RoundedRectangle(cornerRadius: 20).strokeBorder(Color(.volt), lineWidth: 2)
+            }
+        }
         .accessibilityElement(children: .combine)
     }
 }
@@ -88,33 +105,35 @@ private struct MatchingExplanationSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    Text("When a workout matches an event you planned, Gainsday can update that event instead of adding another.")
-                        .foregroundStyle(.secondary)
-                        .listRowBackground(Color.clear)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Update planned events")
+                            .font(.title2.bold())
+                            .foregroundStyle(Color(.ink))
+                        Text("When a workout matches an event you planned, Gainsday updates that event instead of adding another.")
+                            .foregroundStyle(Color(.inkSecondary))
+                    }
+                    MatchingExplanation()
                 }
-                MatchingExplanation()
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
             }
-            .navigationTitle("Update Planned Events")
-            .navigationBarTitleDisplayMode(.inline)
+            .background(Color(.canvas))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Not Now") { dismiss() }
                 }
             }
             .safeAreaBar(edge: .bottom) {
-                Button {
+                Button("Turn On") {
                     MatchingExplanation.hasTurnedOnMatching = true
                     turnOn()
                     dismiss()
-                } label: {
-                    Text("Turn On")
-                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .padding()
+                .buttonStyle(.primary)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
             }
         }
     }

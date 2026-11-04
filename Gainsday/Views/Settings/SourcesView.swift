@@ -73,21 +73,3 @@ struct SourcesView: View {
         }
     }
 }
-
-/// A row that opens the source list and says how many apps are allowed.
-struct SourcesLink: View {
-    @Environment(SyncCoordinator.self) private var coordinator
-
-    var body: some View {
-        NavigationLink {
-            SourcesView()
-        } label: {
-            LabeledContent("Sources", value: summary)
-        }
-    }
-
-    private var summary: String {
-        guard let allowlist = coordinator.settings.sourceAllowlist else { return String(localized: "Every App") }
-        return allowlist.isEmpty ? String(localized: "None") : String(localized: "\(allowlist.count) on")
-    }
-}

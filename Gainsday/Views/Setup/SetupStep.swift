@@ -5,12 +5,8 @@
 nonisolated enum SetupStep: CaseIterable, Hashable {
     /// What Gainsday reads and writes, shown before any permission prompt.
     case welcome
-    case health
-    case calendar
-    /// Whether workouts update the events the user planned. Skipped with add-only access.
-    case matching
-    /// Workout types and the 7-day backfill, then Start Syncing.
-    case start
+    case connect
+    case ready
 
     /// The step after this one, or nil for the last.
     var next: SetupStep? {
@@ -18,4 +14,6 @@ nonisolated enum SetupStep: CaseIterable, Hashable {
         guard let index = steps.firstIndex(of: self), index + 1 < steps.count else { return nil }
         return steps[index + 1]
     }
+
+    var index: Int { Self.allCases.firstIndex(of: self) ?? 0 }
 }

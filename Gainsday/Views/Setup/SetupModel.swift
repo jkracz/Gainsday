@@ -9,12 +9,12 @@ final class SetupModel {
     var path: [SetupStep] = []
     var healthRequested = false
     var calendars: [CalendarInfo]?
+    var calendarColors: [String: CalendarColor] = [:]
     var selectedCalendarID: String?
     var calendarAccessDenied = false
     /// The user chose add-only access, so events go to their default calendar.
     var isAddOnly = false
-    /// Whether workouts update matching planned events. Nil until the matching step's
-    /// Continue, and when that step is skipped, which leaves the setting as it is.
+    /// Nil preserves the restored setting until the user chooses or starts syncing with full access.
     var enablesMatching: Bool?
     /// Whether Start Syncing also adds the past week's workouts.
     var addsPastWeek = true
@@ -27,18 +27,9 @@ final class SetupModel {
 
     func showStep(after step: SetupStep) {
         errorMessage = nil
-        var next = step.next
-        while let skipped = next, !isShown(skipped) {
-            next = skipped.next
-        }
-        if let next {
+        if let next = step.next {
             path.append(next)
         }
-    }
-
-    /// Matching needs to read the user's events, so add-only access skips its step.
-    private func isShown(_ step: SetupStep) -> Bool {
-        step != .matching || !isAddOnly
     }
 
     /// Shows Health's permission sheet, then restarts the workout observer and turns
@@ -86,6 +77,7 @@ final class SetupModel {
     func refreshCalendars(_ coordinator: SyncCoordinator) async {
         do {
             calendars = try await coordinator.calendar.writableCalendars()
+            calendarColors = await coordinator.calendar.calendarColors()
             if selectedCalendar == nil { selectRestoredCalendar(coordinator) }
         } catch {
             errorMessage = error.localizedDescription
@@ -114,6 +106,8 @@ final class SetupModel {
     func startSyncing(_ coordinator: SyncCoordinator) async {
         guard let selectedCalendar else { return }
         isStarting = true
+        // Pin the displayed choice before a late iCloud restore can change it.
+        if !isAddOnly { enablesMatching = showsMatchingOn(coordinator.settings) }
         await coordinator.finishSetup(destination: selectedCalendar, choices: choices)
         if enablesMatching == true { MatchingExplanation.hasTurnedOnMatching = true }
         if addsPastWeek { await coordinator.backfillPastWeek() }

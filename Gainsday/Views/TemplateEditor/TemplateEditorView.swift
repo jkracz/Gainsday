@@ -1,8 +1,7 @@
 import SwiftUI
 import SyncCore
 
-/// Edits the title and notes templates, with placeholder chips, starters and a
-/// live preview rendered exactly as sync will write it.
+/// Edits event templates with starters, placeholders and a live sync preview.
 struct TemplateEditorView: View {
     private enum Field {
         case title
@@ -25,10 +24,28 @@ struct TemplateEditorView: View {
 
     var body: some View {
         Form {
+            TemplatePreviewSection(template: template)
+
+            Section {
+                Picker("Start From", selection: starter) {
+                    Text("Default").tag(Starter.default)
+                    ForEach(StarterTemplate.allCases, id: \.self) { starter in
+                        Text(starter.displayName).tag(Starter.starter(starter))
+                    }
+                    if starter.wrappedValue == .custom {
+                        Text("Custom").tag(Starter.custom)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+
             Section("Title") {
                 TextField("Title", text: $title, selection: $titleSelection)
                     .focused($focusedField, equals: .title)
             }
+            .listRowBackground(Color(.card))
 
             Section("Notes") {
                 TextEditor(text: $notes, selection: $notesSelection)
@@ -36,27 +53,20 @@ struct TemplateEditorView: View {
                     .frame(minHeight: 130)
                     .font(.body.monospaced())
             }
+            .listRowBackground(Color(.card))
 
             Section {
                 PlaceholderChips(insert: insert)
                     .listRowInsets(EdgeInsets())
             } header: {
-                Text("Placeholders")
+                Text("Tap to Insert")
             } footer: {
-                Text("Tap a placeholder to add it at the cursor. Notes lines and title parts with a missing value are left out.")
+                Text("Lines and title parts with a missing value are left out.")
             }
+            .listRowBackground(Color(.card))
 
-            TemplatePreviewSection(template: template)
-
-            Section {
-                ForEach(StarterTemplate.allCases, id: \.self) { starter in
-                    Button(starter.displayName) { apply(starter.template) }
-                }
-                Button("Reset to Default", role: .destructive) { apply(.default) }
-            } header: {
-                Text("Start From")
-            }
         }
+        .canvasBackground()
         .navigationTitle("Event Template")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: load)
@@ -86,6 +96,26 @@ struct TemplateEditorView: View {
         let template = template
         guard hasLoaded, template != coordinator.settings.template else { return }
         coordinator.updateSettings { $0.template = template }
+    }
+
+    /// A starter template or custom edits.
+    private enum Starter: Hashable {
+        case `default`
+        case starter(StarterTemplate)
+        case custom
+    }
+
+    private var starter: Binding<Starter> {
+        Binding {
+            if template == .default { return .default }
+            return StarterTemplate.allCases.first { $0.template == template }.map(Starter.starter) ?? .custom
+        } set: { choice in
+            switch choice {
+            case .default: apply(.default)
+            case .starter(let starter): apply(starter.template)
+            case .custom: break
+            }
+        }
     }
 
     private func apply(_ template: EventTemplate) {
@@ -140,18 +170,11 @@ private struct PlaceholderChips: View {
 }
 
 extension StarterTemplate {
-    var displayName: LocalizedStringKey {
+    var displayName: LocalizedStringResource {
         switch self {
         case .minimal: "Minimal"
         case .detailed: "Detailed"
         case .runner: "Runner"
         }
-    }
-}
-
-/// A row that opens the template editor, shared by the status and settings screens.
-struct TemplateEditorLink: View {
-    var body: some View {
-        NavigationLink("Event Template") { TemplateEditorView() }
     }
 }

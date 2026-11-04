@@ -125,24 +125,3 @@ struct MatchingSettingsView: View {
         return String(localized: "± \(duration)")
     }
 }
-
-/// A row in Settings that opens the matching settings and says whether matching is on.
-struct MatchingSettingsLink: View {
-    @Environment(SyncCoordinator.self) private var coordinator
-
-    var body: some View {
-        NavigationLink {
-            MatchingSettingsView()
-        } label: {
-            LabeledContent("Planned Workouts", value: summary)
-        }
-    }
-
-    private var summary: String {
-        guard coordinator.hasFullCalendarAccess, coordinator.settings.matchingEnabled else { return String(localized: "Off") }
-        switch coordinator.settings.matchMode {
-        case .updatePlannedEvent: return String(localized: "Update")
-        case .createSeparateEvent: return String(localized: "Separate")
-        }
-    }
-}
