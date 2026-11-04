@@ -46,7 +46,8 @@ enum FeedStatus: Hashable {
 
     init(_ entry: ActivityLogEntry) {
         if entry.undoneAt != nil {
-            self = .undone
+            // Undoing an add removes the event, which is what the user will look for.
+            if case .create = entry.action { self = .removed } else { self = .undone }
             return
         }
         switch entry.action {

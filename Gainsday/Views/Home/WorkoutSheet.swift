@@ -53,7 +53,7 @@ struct WorkoutSheet: View {
             }
         }
         .presentationDragIndicator(.visible)
-        .task(id: entry.eventID) { await loadEvent() }
+        .task(id: coordinator.hasFullCalendarAccess) { await loadEvent() }
         .sheet(item: $matching) { entry in
             MatchEventView(entry: entry)
         }

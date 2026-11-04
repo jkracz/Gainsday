@@ -33,6 +33,7 @@ struct SettingsView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
+                    .tint(Color(.inkSecondary))
                 }
             }
 

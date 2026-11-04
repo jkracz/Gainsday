@@ -29,11 +29,12 @@ struct TemplateEditorView: View {
 
             Section {
                 Picker("Start From", selection: starter) {
+                    Text("Default").tag(Starter.default)
                     ForEach(StarterTemplate.allCases, id: \.self) { starter in
-                        Text(starter.displayName).tag(Optional(starter))
+                        Text(starter.displayName).tag(Starter.starter(starter))
                     }
-                    if starter.wrappedValue == nil {
-                        Text("Custom").tag(StarterTemplate?.none)
+                    if starter.wrappedValue == .custom {
+                        Text("Custom").tag(Starter.custom)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -65,10 +66,6 @@ struct TemplateEditorView: View {
             }
             .listRowBackground(Color(.card))
 
-            Section {
-                Button("Reset to Default", role: .destructive) { apply(.default) }
-            }
-            .listRowBackground(Color(.card))
         }
         .canvasBackground()
         .navigationTitle("Event Template")
@@ -102,12 +99,24 @@ struct TemplateEditorView: View {
         coordinator.updateSettings { $0.template = template }
     }
 
-    /// The starter the fields match, or nil once the user has made the template their own.
-    private var starter: Binding<StarterTemplate?> {
+    /// A template the user can start from, or `custom` once they've made it their own.
+    private enum Starter: Hashable {
+        case `default`
+        case starter(StarterTemplate)
+        case custom
+    }
+
+    /// The starting point the fields match.
+    private var starter: Binding<Starter> {
         Binding {
-            StarterTemplate.allCases.first { $0.template == template }
-        } set: { starter in
-            if let starter { apply(starter.template) }
+            if template == .default { return .default }
+            return StarterTemplate.allCases.first { $0.template == template }.map(Starter.starter) ?? .custom
+        } set: { choice in
+            switch choice {
+            case .default: apply(.default)
+            case .starter(let starter): apply(starter.template)
+            case .custom: break
+            }
         }
     }
 

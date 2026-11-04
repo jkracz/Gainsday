@@ -32,6 +32,12 @@ struct ConnectStep: View {
                 .frame(maxWidth: .infinity)
             }
         }
+        .task {
+            // Back in setup after a reinstall or revoked access, full access may already be granted.
+            if model.calendars == nil, await coordinator.calendar.accessMode() == .full {
+                await model.refreshCalendars(coordinator)
+            }
+        }
     }
 }
 

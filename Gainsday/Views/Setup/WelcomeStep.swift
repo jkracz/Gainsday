@@ -50,7 +50,7 @@ private struct Promise: View {
         } icon: {
             Image(systemName: systemImage)
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(Color(.ink))
+                .foregroundStyle(Color.onVolt)
                 .frame(width: 30, height: 30)
                 .background(Color(.volt), in: .circle)
         }

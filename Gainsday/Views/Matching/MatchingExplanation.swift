@@ -10,14 +10,9 @@ struct MatchingExplanation: View {
 
     var body: some View {
         let example = Example(settings: coordinator.settings)
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             SectionLabel(Text("Before"))
             ExampleEventCard(content: example.planned, isHighlighted: false)
-            Image(systemName: "arrow.down")
-                .font(.headline)
-                .foregroundStyle(Color(.inkTertiary))
-                .frame(maxWidth: .infinity)
-                .accessibilityHidden(true)
             SectionLabel(Text("After your workout"))
             ExampleEventCard(content: example.updated, isHighlighted: true)
             VStack(alignment: .leading, spacing: 12) {
@@ -113,10 +108,10 @@ private struct MatchingExplanationSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text("Update planned events")
-                            .font(.title.bold())
+                            .font(.title2.bold())
                             .foregroundStyle(Color(.ink))
                         Text("When a workout matches an event you planned, Gainsday updates that event instead of adding another.")
                             .foregroundStyle(Color(.inkSecondary))
