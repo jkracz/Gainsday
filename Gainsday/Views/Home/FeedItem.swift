@@ -6,8 +6,8 @@ import SyncCore
 /// it, from the activity log.
 struct FeedItem: Identifiable, Hashable {
     /// The entry that says where the workout stands, and whose actions the sheet offers:
-    /// the newest one not undone, since Undo can reopen an older one, such as a held
-    /// workout or a create whose match was undone. The newest if every one was undone.
+    /// the newest, unless it undid a review choice or a manual match, which reopens the
+    /// held workout or the create before it.
     let current: ActivityLogEntry
     /// Every entry for the workout, newest first.
     let history: [ActivityLogEntry]
@@ -29,9 +29,21 @@ struct FeedItem: Identifiable, Hashable {
         }
         return order.compactMap { id in
             guard let entries = byWorkout[id], let newest = entries.first else { return nil }
-            return FeedItem(current: entries.first { $0.undoneAt == nil } ?? newest, history: entries)
+            let current = newest.reopensEarlierEntry ? entries.first { $0.undoneAt == nil } ?? newest : newest
+            return FeedItem(current: current, history: entries)
         }
         .sorted { $0.date > $1.date }
+    }
+}
+
+private extension ActivityLogEntry {
+    /// Whether undoing this entry handed the workout back to an earlier one.
+    var reopensEarlierEntry: Bool {
+        guard undoneAt != nil else { return false }
+        switch undo {
+        case .returnToReview, .separateFromPlannedEvent: return true
+        default: return false
+        }
     }
 }
 
