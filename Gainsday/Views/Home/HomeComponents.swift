@@ -192,14 +192,14 @@ struct ReviewCard: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             RoundedRectangle(cornerRadius: 2)
-                .fill(item.latest.activityType?.tint ?? Color(.workoutOther))
+                .fill(item.current.activityType?.tint ?? Color(.workoutOther))
                 .frame(width: 4)
             VStack(alignment: .leading, spacing: 12) {
                 Text("Needs your call")
                     .font(.caption.weight(.bold))
                     .textCase(.uppercase)
                     .foregroundStyle(Color(.warning))
-                Text("\(Text(verbatim: item.latest.title).bold()), \(Text(item.date, format: .dateTime.weekday().hour().minute())). Was this a workout you planned?")
+                Text("\(Text(verbatim: item.current.title).bold()), \(Text(item.date, format: .dateTime.weekday().hour().minute())). Was this a workout you planned?")
                     .font(.body)
                     .foregroundStyle(Color(.ink))
                 HStack(spacing: 10) {
@@ -230,7 +230,7 @@ struct ReviewCard: View {
 
     private func addSeparately() async {
         do {
-            try await coordinator.addSeparateEvent(for: item.latest)
+            try await coordinator.addSeparateEvent(for: item.current)
         } catch {
             if case ManualMatchError.notAdded(let reason) = error {
                 notAddedReason = reason
@@ -265,11 +265,11 @@ struct FeedCard: View {
     var body: some View {
         HStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 2)
-                .fill(item.latest.activityType?.tint ?? Color(.workoutOther))
+                .fill(item.current.activityType?.tint ?? Color(.workoutOther))
                 .frame(width: 4)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(verbatim: item.latest.title)
+                Text(verbatim: item.current.title)
                     .font(.headline)
                     .foregroundStyle(item.status.isInCalendar ? Color(.ink) : Color(.inkSecondary))
                     .lineLimit(1)
@@ -343,9 +343,9 @@ struct SkippedView: View {
     var body: some View {
         List(items) { item in
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: item.latest.title)
+                Text(verbatim: item.current.title)
                     .font(.headline)
-                Text(item.latest.action.logDescription)
+                Text(item.current.action.logDescription)
                     .font(.subheadline)
                     .foregroundStyle(Color(.inkSecondary))
                 Text(item.date, format: .dateTime.weekday().day().month().hour().minute())

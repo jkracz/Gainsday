@@ -4,7 +4,9 @@ import SyncCore
 /// One workout: what Gainsday did with it, its event as it is in the calendar, and
 /// everything the user can do about it.
 struct WorkoutSheet: View {
-    let item: FeedItem
+    /// The workout as the feed showed it. The sheet follows the activity log from there,
+    /// so it stays current after a match or Undo.
+    let opened: FeedItem
     let workout: Workout?
     let calendarColor: CalendarColor?
     /// Removes the workout's event, behind an Undo toast on the feed.
@@ -23,7 +25,10 @@ struct WorkoutSheet: View {
     /// Why a held workout wasn't added, when the engine said.
     @State private var notAddedReason: SkipReason?
 
-    private var entry: ActivityLogEntry { item.latest }
+    private var item: FeedItem {
+        FeedItem.items(from: coordinator.activityLog).first { $0.id == opened.id } ?? opened
+    }
+    private var entry: ActivityLogEntry { item.current }
     private var canAct: Bool { coordinator.hasFullCalendarAccess && !coordinator.isSyncing }
 
     var body: some View {
@@ -53,7 +58,7 @@ struct WorkoutSheet: View {
             }
         }
         .presentationDragIndicator(.visible)
-        .task(id: coordinator.hasFullCalendarAccess) { await loadEvent() }
+        .task(id: EventSource(entryID: entry.id, hasFullAccess: coordinator.hasFullCalendarAccess)) { await loadEvent() }
         .sheet(item: $matching) { entry in
             MatchEventView(entry: entry)
         }
@@ -211,7 +216,7 @@ struct WorkoutSheet: View {
                             Text("Undone")
                                 .font(.subheadline)
                                 .foregroundStyle(Color(.inkSecondary))
-                        } else if entry.id != item.latest.id, entry.canUndo {
+                        } else if entry.id != item.current.id, entry.canUndo {
                             Button("Undo") { confirming = entry }
                                 .font(.subheadline.weight(.semibold))
                                 .disabled(!canAct)
@@ -223,8 +228,17 @@ struct WorkoutSheet: View {
         }
     }
 
+    /// What the event shown depends on: the entry it's for, and whether it can be read.
+    private struct EventSource: Hashable {
+        var entryID: UUID
+        var hasFullAccess: Bool
+    }
+
     private func loadEvent() async {
-        guard coordinator.hasFullCalendarAccess, item.status.isInCalendar, let id = entry.eventID else { return }
+        guard coordinator.hasFullCalendarAccess, item.status.isInCalendar, let id = entry.eventID else {
+            event = nil
+            return
+        }
         event = try? await coordinator.calendar.event(withID: id)
     }
 

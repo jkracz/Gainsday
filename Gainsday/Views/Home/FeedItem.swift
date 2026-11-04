@@ -2,20 +2,22 @@ import Foundation
 import SwiftUI
 import SyncCore
 
-/// One workout in the home feed: the latest thing Gainsday did with it, and
-/// everything before that, from the activity log.
+/// One workout in the home feed: where it stands, and everything Gainsday did with
+/// it, from the activity log.
 struct FeedItem: Identifiable, Hashable {
-    /// The newest entry for the workout. Its status is the card's badge.
-    let latest: ActivityLogEntry
-    /// Every entry for the workout, newest first, the latest included.
+    /// The entry that says where the workout stands, and whose actions the sheet offers:
+    /// the newest one not undone, since Undo can reopen an older one, such as a held
+    /// workout or a create whose match was undone. The newest if every one was undone.
+    let current: ActivityLogEntry
+    /// Every entry for the workout, newest first.
     let history: [ActivityLogEntry]
 
-    var id: UUID { latest.workoutID }
+    var id: UUID { current.workoutID }
 
     /// When the workout started, or when the entry was logged if that isn't known.
-    var date: Date { latest.workoutStart ?? latest.date }
+    var date: Date { current.workoutStart ?? current.date }
 
-    var status: FeedStatus { FeedStatus(latest) }
+    var status: FeedStatus { FeedStatus(current) }
 
     /// The log grouped by workout, newest first.
     static func items(from log: [ActivityLogEntry]) -> [FeedItem] {
@@ -26,8 +28,8 @@ struct FeedItem: Identifiable, Hashable {
             byWorkout[entry.workoutID, default: []].append(entry)
         }
         return order.compactMap { id in
-            guard let entries = byWorkout[id], let latest = entries.first else { return nil }
-            return FeedItem(latest: latest, history: entries)
+            guard let entries = byWorkout[id], let newest = entries.first else { return nil }
+            return FeedItem(current: entries.first { $0.undoneAt == nil } ?? newest, history: entries)
         }
         .sorted { $0.date > $1.date }
     }

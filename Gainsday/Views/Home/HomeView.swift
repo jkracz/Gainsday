@@ -15,7 +15,7 @@ struct HomeView: View {
     @State private var removal = PendingRemoval()
 
     private var items: [FeedItem] {
-        FeedItem.items(from: coordinator.activityLog).filter { !removal.hiddenIDs.contains($0.latest.id) }
+        FeedItem.items(from: coordinator.activityLog).filter { !removal.hiddenIDs.contains($0.current.id) }
     }
 
     var body: some View {
@@ -29,7 +29,7 @@ struct HomeView: View {
                     HomeBanners()
                     WeekStrip(items: shown, workouts: workouts)
                     ForEach(shown.filter { $0.status == .needsReview }) { item in
-                        ReviewCard(item: item, workout: workouts[item.id]) { matching = item.latest }
+                        ReviewCard(item: item, workout: workouts[item.id]) { matching = item.current }
                     }
                     ForEach(days(of: shown), id: \.self) { day in
                         SectionLabel(dayTitle(day))
@@ -83,7 +83,7 @@ struct HomeView: View {
         }
         .tint(Color.accentColor)
         .sheet(item: $selected) { item in
-            WorkoutSheet(item: item, workout: workouts[item.id], calendarColor: destinationColor) { entry in
+            WorkoutSheet(opened: item, workout: workouts[item.id], calendarColor: destinationColor) { entry in
                 removal.start(entry, coordinator: coordinator)
             }
         }
